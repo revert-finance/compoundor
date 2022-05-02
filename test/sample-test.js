@@ -33,8 +33,8 @@ describe("AutoCompounder Tests", function () {
     const usdc = await ethers.getContractAt("IERC20", usdcAddress);
     const weth = await ethers.getContractAt("IERC20", wethAddress);
 
-    const amountETH = BigNumber.from(1000000000000000)
-    const amountUSDC = BigNumber.from(1000000)
+    const amountETH = BigNumber.from("1000000000000000000")
+    const amountUSDC = BigNumber.from("1000000000")
 
     const haydenSigner = await impersonateAccountAndGetSigner(haydenAddress)
 

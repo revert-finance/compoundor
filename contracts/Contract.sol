@@ -8,7 +8,7 @@ import "./external/openzeppelin/utils/Multicall.sol";
 import "./external/openzeppelin/token/ERC20/SafeERC20.sol";
 import { SafeMath } from "./external/openzeppelin/math/SafeMath.sol";
 
-import "./external/uniswap/v3-core/interfaces/pool/IUniswapV3PoolState.sol";
+import "./external/uniswap/v3-core/interfaces/IUniswapV3Pool.sol";
 import "./external/uniswap/v3-core/libraries/TickMath.sol";
 
 import "./external/uniswap/v3-periphery/libraries/LiquidityAmounts.sol";
@@ -37,7 +37,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     uint64 public totalBonusX64 = MAX_BONUS_X64; // 5%
     uint64 public compounderBonusX64 = MAX_BONUS_X64 / 5; // 1%
     uint64 public minSwapRatioX64 = uint64(EXP_64 / 20); // 5%
-    uint64 public minSwapPriceChangeX64 = uint64(EXP_64 / 20); // 5%
+    uint32 public maxTWAPTickDifference = 100; // 1% 
 
     mapping(uint256 => address) public override ownerOf;
     mapping(address => uint256[]) public userTokens;
@@ -197,6 +197,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     struct SwapState {
         uint256 positionAmount0;
         uint256 positionAmount1;
+        int24 tick;
+        int24 otherTick;
         uint256 priceX96;
         uint160 sqrtPriceX96;
         uint160 sqrtPriceX96Lower;
@@ -208,14 +210,33 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 total0;
     }
 
+    function _get30SecTWAPTick(IUniswapV3Pool pool) internal view returns (int24) {
+        uint32[] memory secondsAgos = new uint32[](2);
+        secondsAgos[0] = 0; // from (before)
+        secondsAgos[1] = 30; // from (before)
+        (int56[] memory tickCumulatives, ) = pool.observe(secondsAgos);
+        return int24(tickCumulatives[0] - tickCumulatives[1]) / 30;
+    }
+
+    function _requireMaxTickDifference(int24 tick, int24 other) internal view {
+        console.log(tick > 0 ? uint(tick) : uint(-tick), other > 0 ? uint(other) : uint(-other));
+        require(other > tick && uint48(other - tick) < maxTWAPTickDifference ||
+        other <= tick && uint48(tick - other) < maxTWAPTickDifference,
+        "TWAP err");
+    }
+
     function _swapToPriceRatio(address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint256 amount0, uint256 amount1, uint256 deadline) internal returns (uint256, uint256) {
         
         SwapState memory state;
         
         // get price
-        IUniswapV3PoolState pool = IUniswapV3PoolState(factory.getPool(token0, token1, fee));
+        IUniswapV3Pool pool = IUniswapV3Pool(factory.getPool(token0, token1, fee));
 
-        (state.sqrtPriceX96,,,,,,) = pool.slot0();
+        (state.sqrtPriceX96,state.tick,,,,,) = pool.slot0();
+
+        // check that price is not too far from TWAP
+        state.otherTick = _get30SecTWAPTick(pool);
+        _requireMaxTickDifference(state.tick, state.otherTick);
 
         // calculate position amounts
         state.sqrtPriceX96Lower = TickMath.getSqrtRatioAtTick(tickLower);
@@ -254,6 +275,11 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 amount1 = amount1.sub(state.delta1);
             }
         }
+
+        (,state.otherTick,,,,,) = pool.slot0();
+
+        // check that price did not move to far from swap
+        _requireMaxTickDifference(state.tick, state.otherTick);
 
         return (amount0, amount1);
     }
