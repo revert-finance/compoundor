@@ -112,81 +112,78 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         state.amount0 = state.amount0.add(userBalances[state.tokenOwner][state.token0]);
         state.amount1 = state.amount1.add(userBalances[state.tokenOwner][state.token1]);
 
-        // if there are no balances to work with - stop here
-        if (state.amount0 == 0 && state.amount1 == 0) {
-            return (0, 0);
-        }
+        // only if there are balances to work with - start autocompounding process
+        if (state.amount0 > 0 || state.amount1 > 0) {
 
-        // swap to position ratio
-        (state.amount0, state.amount1) = _swapToPriceRatio(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.amount0, state.amount1, params.deadline);
+            // swap to position ratio
+            (state.amount0, state.amount1) = _swapToPriceRatio(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.amount0, state.amount1, params.deadline);
 
-        // max amount to add considering fees (if token owner is calling - no fees)
-        state.maxAddAmount0 = state.tokenOwner == msg.sender ? state.amount0 : state.amount0 * EXP_64 / (EXP_64 + totalBonusX64);
-        state.maxAddAmount1 = state.tokenOwner == msg.sender ? state.amount1 : state.amount1 * EXP_64 / (EXP_64 + totalBonusX64);
+            // max amount to add considering fees (if token owner is calling - no fees)
+            state.maxAddAmount0 = state.tokenOwner == msg.sender ? state.amount0 : state.amount0 * EXP_64 / (EXP_64 + totalBonusX64);
+            state.maxAddAmount1 = state.tokenOwner == msg.sender ? state.amount1 : state.amount1 * EXP_64 / (EXP_64 + totalBonusX64);
 
-        // avoid rounding to 0 for very small amounts
-        if (state.amount0 > 0 && state.maxAddAmount0 == 0 || state.amount1 > 0 && state.maxAddAmount1 == 0) {
-            return (0, 0);
-        }
-
-        // deposit liquidity into tokenId
-        (, state.amountAdded0, state.amountAdded1) = nonfungiblePositionManager.increaseLiquidity(
-            INonfungiblePositionManager.IncreaseLiquidityParams(
-                params.tokenId,
-                state.maxAddAmount0,
-                state.maxAddAmount1,
-                0,
-                0,
-                params.deadline
-            )
-        );
-
-        // fees only when not tokenOwner
-        if (state.tokenOwner != msg.sender) {
-            state.amount0Fees = state.amountAdded0 * totalBonusX64 / EXP_64;
-            state.amount1Fees = state.amountAdded1 * totalBonusX64 / EXP_64;
-        }
-
-        // calculate remaining tokens for owner
-        userBalances[state.tokenOwner][state.token0] = state.amount0.sub(state.amountAdded0).sub(state.amount0Fees);
-        userBalances[state.tokenOwner][state.token1] = state.amount1.sub(state.amountAdded1).sub(state.amount1Fees);
-
-        // convert fees to token of choice (TODO add optimisation in _swapToPriceRatio formula to do this directly - save one swap)
-        if (params.bonusConversion == BonusConversion.TOKEN_0) {
-            if (state.amount1Fees > 0) {
-                uint256 output = _swap(abi.encodePacked(state.token1, state.fee, state.token0), state.amount1Fees, params.deadline);
-                state.amount0Fees = state.amount0Fees.add(output);
-                state.amount1Fees = 0;
+            // only add liquitidy when enough tokens available (avoid rounding to 0 for very small amounts)
+            if (!(state.amount0 > 0 && state.maxAddAmount0 == 0 || state.amount1 > 0 && state.maxAddAmount1 == 0)) {
+                // deposit liquidity into tokenId
+                (, state.amountAdded0, state.amountAdded1) = nonfungiblePositionManager.increaseLiquidity(
+                    INonfungiblePositionManager.IncreaseLiquidityParams(
+                        params.tokenId,
+                        state.maxAddAmount0,
+                        state.maxAddAmount1,
+                        0,
+                        0,
+                        params.deadline
+                    )
+                );
             }
-        } else if (params.bonusConversion == BonusConversion.TOKEN_1) {
-            if (state.amount0Fees > 0) {
-                uint256 output = _swap(abi.encodePacked(state.token0, state.fee, state.token1), state.amount0Fees, params.deadline);
-                state.amount1Fees = state.amount1Fees.add(output);
-                state.amount0Fees = 0;
+
+            // fees only when not tokenOwner
+            if (state.tokenOwner != msg.sender) {
+                state.amount0Fees = state.amountAdded0 * totalBonusX64 / EXP_64;
+                state.amount1Fees = state.amountAdded1 * totalBonusX64 / EXP_64;
             }
-        }
 
-        // distribute fees -  handle 3 cases (contract owner / nft owner / oneone else)
-        if (owner() == msg.sender) {
-            userBalances[msg.sender][state.token0] = userBalances[msg.sender][state.token0].add(state.amount0Fees);
-            userBalances[msg.sender][state.token1] = userBalances[msg.sender][state.token1].add(state.amount1Fees);
+            // calculate remaining tokens for owner
+            userBalances[state.tokenOwner][state.token0] = state.amount0.sub(state.amountAdded0).sub(state.amount0Fees);
+            userBalances[state.tokenOwner][state.token1] = state.amount1.sub(state.amountAdded1).sub(state.amount1Fees);
 
-            bonus0 = state.amount0Fees;
-            bonus1 = state.amount1Fees;
-        } else if (state.tokenOwner == msg.sender) {
-            bonus0 = 0;
-            bonus1 = 0;
-        } else {
-            uint256 compounderFees0 = state.amount0Fees * compounderBonusX64 / EXP_64;
-            uint256 compounderFees1 = state.amount1Fees * compounderBonusX64 / EXP_64;
+            // convert fees to token of choice (TODO add optimisation in _swapToPriceRatio formula to do this directly - save one swap)
+            if (params.bonusConversion == BonusConversion.TOKEN_0) {
+                if (state.amount1Fees > 0) {
+                    uint256 output = _swap(abi.encodePacked(state.token1, state.fee, state.token0), state.amount1Fees, params.deadline);
+                    state.amount0Fees = state.amount0Fees.add(output);
+                    state.amount1Fees = 0;
+                }
+            } else if (params.bonusConversion == BonusConversion.TOKEN_1) {
+                if (state.amount0Fees > 0) {
+                    uint256 output = _swap(abi.encodePacked(state.token0, state.fee, state.token1), state.amount0Fees, params.deadline);
+                    state.amount1Fees = state.amount1Fees.add(output);
+                    state.amount0Fees = 0;
+                }
+            }
 
-            userBalances[msg.sender][state.token0] = userBalances[msg.sender][state.token0].add(compounderFees0);
-            userBalances[msg.sender][state.token1] = userBalances[msg.sender][state.token1].add(compounderFees1);
-            userBalances[owner()][state.token0] = userBalances[owner()][state.token0].add(state.amount0Fees.sub(compounderFees0));
-            userBalances[owner()][state.token1] = userBalances[owner()][state.token1].add(state.amount1Fees.sub(compounderFees1));
+            // distribute fees -  handle 3 cases (contract owner / nft owner / oneone else)
+            if (owner() == msg.sender) {
+                userBalances[msg.sender][state.token0] = userBalances[msg.sender][state.token0].add(state.amount0Fees);
+                userBalances[msg.sender][state.token1] = userBalances[msg.sender][state.token1].add(state.amount1Fees);
 
-            bonus0 = compounderFees0;
-            bonus1 = compounderFees1;
+                bonus0 = state.amount0Fees;
+                bonus1 = state.amount1Fees;
+            } else if (state.tokenOwner == msg.sender) {
+                bonus0 = 0;
+                bonus1 = 0;
+            } else {
+                uint256 compounderFees0 = state.amount0Fees * compounderBonusX64 / EXP_64;
+                uint256 compounderFees1 = state.amount1Fees * compounderBonusX64 / EXP_64;
+
+                userBalances[msg.sender][state.token0] = userBalances[msg.sender][state.token0].add(compounderFees0);
+                userBalances[msg.sender][state.token1] = userBalances[msg.sender][state.token1].add(compounderFees1);
+                userBalances[owner()][state.token0] = userBalances[owner()][state.token0].add(state.amount0Fees.sub(compounderFees0));
+                userBalances[owner()][state.token1] = userBalances[owner()][state.token1].add(state.amount1Fees.sub(compounderFees1));
+
+                bonus0 = compounderFees0;
+                bonus1 = compounderFees1;
+            }
         }
 
         if (params.withdrawBonus) {
