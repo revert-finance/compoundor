@@ -213,15 +213,14 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     function _get30SecTWAPTick(IUniswapV3Pool pool) internal view returns (int24) {
         uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = 0; // from (before)
-        secondsAgos[1] = 30; // from (before)
+        secondsAgos[1] = 300; // from (before)
         (int56[] memory tickCumulatives, ) = pool.observe(secondsAgos);
-        return int24(tickCumulatives[0] - tickCumulatives[1]) / 30;
+        return int24((tickCumulatives[0] - tickCumulatives[1]) / 300);
     }
 
     function _requireMaxTickDifference(int24 tick, int24 other) internal view {
-        console.log(tick > 0 ? uint(tick) : uint(-tick), other > 0 ? uint(other) : uint(-other));
-        require(other > tick && uint48(other - tick) < maxTWAPTickDifference ||
-        other <= tick && uint48(tick - other) < maxTWAPTickDifference,
+        require(other > tick && (uint48(other - tick) < maxTWAPTickDifference) ||
+        other <= tick && (uint48(tick - other) < maxTWAPTickDifference),
         "TWAP err");
     }
 
@@ -235,8 +234,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         (state.sqrtPriceX96,state.tick,,,,,) = pool.slot0();
 
         // check that price is not too far from TWAP
-        state.otherTick = _get30SecTWAPTick(pool);
-        _requireMaxTickDifference(state.tick, state.otherTick);
+        //state.otherTick = _get30SecTWAPTick(pool);
+        //_requireMaxTickDifference(state.tick, state.otherTick);
 
         // calculate position amounts
         state.sqrtPriceX96Lower = TickMath.getSqrtRatioAtTick(tickLower);
@@ -276,10 +275,10 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             }
         }
 
-        (,state.otherTick,,,,,) = pool.slot0();
+        //(,state.otherTick,,,,,) = pool.slot0();
 
         // check that price did not move to far from swap
-        _requireMaxTickDifference(state.tick, state.otherTick);
+        //_requireMaxTickDifference(state.tick, state.otherTick);
 
         return (amount0, amount1);
     }
