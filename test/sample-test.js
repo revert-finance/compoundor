@@ -28,7 +28,7 @@ describe("AutoCompounder Tests", function () {
       [owner] = await ethers.getSigners();
   });
 
-  it("Test mintAndSwap", async function () {
+  it("Test swapAndMint", async function () {
     const deadline = Math.floor(new Date().getTime() / 1000)
     const usdc = await ethers.getContractAt("IERC20", usdcAddress);
     const weth = await ethers.getContractAt("IERC20", wethAddress);
@@ -49,17 +49,17 @@ describe("AutoCompounder Tests", function () {
 
     // pure eth
     await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
-    await contract.connect(haydenSigner).mintAndSwap({ token0, token1, fee, tickLower: minTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: amountETH});
+    await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: minTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: amountETH});
 
     // half eth / half weth
     await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
     await weth.connect(haydenSigner).approve(contract.address, amountETH.div(2))
-    await contract.connect(haydenSigner).mintAndSwap({ token0, token1, fee, tickLower: minTick, tickUpper:mediumTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: amountETH.div(2)});
+    await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: minTick, tickUpper:mediumTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: amountETH.div(2)});
     
     // pure weth
     await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
     await weth.connect(haydenSigner).approve(contract.address, amountETH)
-    await contract.connect(haydenSigner).mintAndSwap({ token0, token1, fee, tickLower: mediumTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: 0});
+    await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: mediumTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: 0});
   })
 
   it("Test main functionality with hayden position 8", async function () {
@@ -70,6 +70,15 @@ describe("AutoCompounder Tests", function () {
     const deadline = Math.floor(new Date().getTime() / 1000)
    
     await nonfungiblePositionManager.connect(haydenSigner)[["safeTransferFrom(address,address,uint256)"]](haydenAddress, contract.address, nftId);
+
+    // add liquidity (one)
+    const usdc = await ethers.getContractAt("IERC20", usdcAddress);
+    const usdt = await ethers.getContractAt("IERC20", usdtAddress);
+    const amount = BigNumber.from("1000000")
+    await usdc.connect(haydenSigner).approve(contract.address, amount)
+    //await usdt.connect(haydenSigner).approve(contract.address, amount)
+
+    //await contract.connect(haydenSigner).swapAndIncreaseLiquidity({ tokenId: nftId, amount0: amount, amount1: "0", deadline});
 
     // autocompound without trade
     const position = await nonfungiblePositionManager.positions(nftId);

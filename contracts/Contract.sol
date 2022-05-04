@@ -358,9 +358,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     /**
-     * @notice Creates a new position wrapped in a NFT - swaps to the correct ratio and adds it to be autocompounded
+     * @notice Creates a new position swapping to the correct ratio and adds it to be autocompounded
      */
-    function mintAndSwap(MintAndSwapParams calldata params) external payable override nonReentrant
+    function swapAndMint(SwapAndMintParams calldata params) external payable override nonReentrant
         returns (
             uint256 tokenId,
             uint128 liquidity,
@@ -370,18 +370,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     {
         require(params.token0 != params.token1, "token0=token1");
 
-        // wrap ether sent
-        if (msg.value > 0) {
-            (bool success,) = payable(weth).call{ value: msg.value }("");
-            require(success, "wrap eth fail");
-        }
+        _prepareAdd(params.token0, params.token1, params.amount0, params.amount1);
 
-        // get missing tokens
-        IERC20(params.token0).transferFrom(msg.sender, address(this), (weth == params.token0 ? params.amount0.sub(msg.value) : params.amount0));
-        IERC20(params.token1).transferFrom(msg.sender, address(this), (weth == params.token1 ? params.amount1.sub(msg.value) : params.amount1));
-
-        _checkApprovals(IERC20(params.token0), IERC20(params.token1));
-        
         (uint256 swappedAmount0, uint256 swappedAmount1) = _swapToPriceRatio(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, params.amount0, params.amount1, params.deadline);
 
         INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, swappedAmount0, swappedAmount1, 0, 0, address(this), params.deadline);
@@ -394,6 +384,61 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         userBalances[params.recipient][params.token0] = swappedAmount0.sub(amount0);
         userBalances[params.recipient][params.token1] = swappedAmount1.sub(amount1);
     }
+
+    struct SwapAndIncreaseLiquidityState {
+        address token0;
+        address token1;
+        uint24 fee;
+        int24 tickLower;
+        int24 tickUpper;
+        uint256 swappedAmount0;
+        uint256 swappedAmount1;
+    }
+
+    /**
+     * @notice Increase liquidity in the correct ratio
+     */
+    function swapAndIncreaseLiquidity(SwapAndIncreaseLiquidityParams calldata params) external payable override nonReentrant
+        returns (
+            uint128 liquidity,
+            uint256 amount0,
+            uint256 amount1
+        )
+    {
+        SwapAndIncreaseLiquidityState memory state;
+
+        (, , state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, , , , , ) = nonfungiblePositionManager.positions(params.tokenId);
+
+        _prepareAdd(state.token0, state.token1, params.amount0, params.amount1);
+
+        (state.swappedAmount0, state.swappedAmount1) = _swapToPriceRatio(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, params.amount0, params.amount1, params.deadline);
+
+        INonfungiblePositionManager.IncreaseLiquidityParams memory increaseLiquidityParams = INonfungiblePositionManager.IncreaseLiquidityParams(params.tokenId, state.swappedAmount0, state.swappedAmount1, 0, 0, params.deadline);
+
+        (liquidity, amount0, amount1) = nonfungiblePositionManager.increaseLiquidity(increaseLiquidityParams);
+
+        // store balance in favor
+        userBalances[msg.sender][state.token0] = state.swappedAmount0.sub(amount0);
+        userBalances[msg.sender][state.token1] = state.swappedAmount1.sub(amount1);
+    }
+
+    function _prepareAdd(address token0, address token1, uint amount0, uint amount1) internal {
+          // wrap ether sent
+        if (msg.value > 0) {
+            (bool success,) = payable(weth).call{ value: msg.value }("");
+            require(success, "wrap eth fail");
+        }
+
+        // get missing tokens
+        if (amount0 > 0) {
+            IERC20(token0).transferFrom(msg.sender, address(this), (weth == token0 ? amount0.sub(msg.value) : amount0));
+        }
+        if (amount1 > 0) {
+            IERC20(token1).transferFrom(msg.sender, address(this), (weth == token1 ? amount1.sub(msg.value) : amount1));
+        }
+
+        _checkApprovals(IERC20(token0), IERC20(token1));
+     }
 
     /**
      * @notice Special method to decrease liquidity and collect decreased amount

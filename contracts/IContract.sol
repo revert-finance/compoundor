@@ -81,7 +81,7 @@ interface IContract is IERC721Receiver {
     /// @return bonus1 The amount of token1 you get as a bonus for autocompounding
     function autoCompound(AutoCompoundParams calldata params) external returns (uint256 bonus0, uint256 bonus1);
 
-    struct MintAndSwapParams {
+    struct SwapAndMintParams {
         address token0;
         address token1;
         uint24 fee;
@@ -92,7 +92,7 @@ interface IContract is IERC721Receiver {
         address recipient;
         uint256 deadline;
     }
-
+    
     /// @notice Creates a new position wrapped in a NFT - swaps to the correct ratio and adds it to be autocompounded
     /// @dev Call this when the pool does exist and is initialized. Note that if the pool is created but not initialized
     /// a method does not exist, i.e. the pool is assumed to be initialized.
@@ -101,11 +101,32 @@ interface IContract is IERC721Receiver {
     /// @return liquidity The amount of liquidity for this position
     /// @return amount0 The amount of token0
     /// @return amount1 The amount of token1
-    function mintAndSwap(MintAndSwapParams calldata params)
+    function swapAndMint(SwapAndMintParams calldata params)
         external
         payable
         returns (
             uint256 tokenId,
+            uint128 liquidity,
+            uint256 amount0,
+            uint256 amount1
+        );
+
+    struct SwapAndIncreaseLiquidityParams {
+        uint256 tokenId;
+        uint256 amount0;
+        uint256 amount1;
+        uint256 deadline;
+    }
+
+    /// @notice Swaps to the correct ratio and adds liquidity to a position
+    /// @param params The params necessary to mint a position, encoded as `SwapAndIncreaseLiquidityParams` in calldata
+    /// @return liquidity The amount of liquidity for this position
+    /// @return amount0 The amount of token0
+    /// @return amount1 The amount of token1
+    function swapAndIncreaseLiquidity(SwapAndIncreaseLiquidityParams calldata params)
+        external
+        payable
+        returns (
             uint128 liquidity,
             uint256 amount0,
             uint256 amount1
