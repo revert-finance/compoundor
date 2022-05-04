@@ -28,17 +28,20 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     // max bonus
     uint64 constant public MAX_BONUS_X64 = uint64(EXP_64 / 20); // 5%
 
-    address override public weth;
-    IUniswapV3Factory override public factory;
-    INonfungiblePositionManager override public nonfungiblePositionManager;
-    ISwapRouter override public swapRouter;
-
-    // initial bonus - can be changed from owner
+    // changable config values
     uint64 public totalBonusX64 = MAX_BONUS_X64; // 5%
     uint64 public compounderBonusX64 = MAX_BONUS_X64 / 5; // 1%
     uint64 public minSwapRatioX64 = uint64(EXP_64 / 20); // 5%
     uint32 public maxTWAPTickDifference = 100; // 1%
     uint32 public maxSwapTickDifference = 100; // 1% 
+
+    // wrapped native token address
+    address override public weth;
+
+    // uniswap v3 components
+    IUniswapV3Factory override public factory;
+    INonfungiblePositionManager override public nonfungiblePositionManager;
+    ISwapRouter override public swapRouter;
 
     mapping(uint256 => address) public override ownerOf;
     mapping(address => uint256[]) public userTokens;
@@ -235,8 +238,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         (state.sqrtPriceX96,state.tick,,,,,) = pool.slot0();
 
         // check that price is not too far from TWAP
-        //state.otherTick = _getTWAPTick(pool);
-        //_requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
+        state.otherTick = _getTWAPTick(pool);
+        _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
 
         // calculate position amounts
         state.sqrtPriceX96Lower = TickMath.getSqrtRatioAtTick(tickLower);
@@ -274,12 +277,11 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 amount0 = amount0.add(amountOut);
                 amount1 = amount1.sub(state.delta1);
             }
+
+            // check that price did not move to far from swap
+            (,state.otherTick,,,,,) = pool.slot0();
+            _requireMaxTickDifference(state.tick, state.otherTick, maxSwapTickDifference);
         }
-
-        //(,state.otherTick,,,,,) = pool.slot0();
-
-        // check that price did not move to far from swap
-        //_requireMaxTickDifference(state.tick, state.otherTick, maxSwapTickDifference);
 
         return (amount0, amount1);
     }
@@ -304,9 +306,11 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     function _swap(bytes memory swapPath, uint256 amount, uint256 deadline) internal returns (uint256 amountOut) {
-        amountOut = swapRouter.exactInput(
-            ISwapRouter.ExactInputParams(swapPath, address(this), deadline, amount, 0)
-        );
+        if (amount > 0) {
+            amountOut = swapRouter.exactInput(
+                ISwapRouter.ExactInputParams(swapPath, address(this), deadline, amount, 0)
+            );
+        }
     }
 
     function _addToken(uint256 tokenId, address account, bool checkApprovals) internal {

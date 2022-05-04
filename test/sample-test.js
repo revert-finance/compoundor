@@ -78,7 +78,7 @@ describe("AutoCompounder Tests", function () {
     await usdc.connect(haydenSigner).approve(contract.address, amount)
     //await usdt.connect(haydenSigner).approve(contract.address, amount)
 
-    //await contract.connect(haydenSigner).swapAndIncreaseLiquidity({ tokenId: nftId, amount0: amount, amount1: "0", deadline});
+    await contract.connect(haydenSigner).swapAndIncreaseLiquidity({ tokenId: nftId, amount0: amount, amount1: "0", deadline});
 
     // autocompound without trade
     const position = await nonfungiblePositionManager.positions(nftId);
