@@ -33,6 +33,11 @@ module.exports = {
         url: "https://eth-mainnet.alchemyapi.io/v2/gwRYWylWRij2jXTnPXR90v-YqXh96PDX",
         blockNumber: 14667418 // 2022-04-27
       }
+    },
+    polygon: {
+      url: "https://polygon-rpc.com",
+      chainId: 137,
+      gasPrice: 100000000000
     }
   }
 };

@@ -6,7 +6,7 @@ import "./external/openzeppelin/access/Ownable.sol";
 import "./external/openzeppelin/utils/ReentrancyGuard.sol";
 import "./external/openzeppelin/utils/Multicall.sol";
 import "./external/openzeppelin/token/ERC20/SafeERC20.sol";
-import { SafeMath } from "./external/openzeppelin/math/SafeMath.sol";
+import "./external/openzeppelin/math/SafeMath.sol";
 
 import "./external/uniswap/v3-core/interfaces/IUniswapV3Pool.sol";
 import "./external/uniswap/v3-core/libraries/TickMath.sol";
@@ -16,6 +16,7 @@ import "./external/uniswap/v3-periphery/interfaces/INonfungiblePositionManager.s
 
 import "./IContract.sol";
 
+// TODO temp
 import "hardhat/console.sol";
 
 contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
@@ -31,9 +32,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     // changable config values
     uint64 public totalBonusX64 = MAX_BONUS_X64; // 5%
     uint64 public compounderBonusX64 = MAX_BONUS_X64 / 5; // 1%
-    uint64 public minSwapRatioX64 = uint64(EXP_64 / 20); // 5%
+    uint64 public minSwapRatioX64 = uint64(EXP_64 / 40); // 2.5%
     uint32 public maxTWAPTickDifference = 100; // 1%
-    uint32 public maxSwapTickDifference = 100; // 1% 
+    uint32 public maxSwapTickDifference = 100; // 1%
 
     // wrapped native token address
     address override public weth;
@@ -100,6 +101,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
      * @param params Specifies how autocompound should be done
      */
     function autoCompound(AutoCompoundParams calldata params) override external nonReentrant returns (uint256 bonus0, uint256 bonus1) {
+
+        require(ownerOf[params.tokenId] != address(0), "!compounded");
+        require(params.deadline < block.timestamp + 300, "deadline");
 
         AutoCompoundState memory state;
 
@@ -191,7 +195,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         }
 
         if (params.withdrawBonus) {
-            withdrawFullBalances(state.token0, state.token1, msg.sender);
+            _withdrawFullBalances(state.token0, state.token1, msg.sender);
         }
 
         emit AutoCompounded(msg.sender, params.tokenId, state.amountAdded0, state.amountAdded1, bonus0, bonus1);
@@ -212,6 +216,235 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 delta1;
         bool sell0;
         uint256 total0;
+    }
+
+    /**
+     * @notice Management method to lower fees or change ratio between total and compounder fees
+     */
+    function setBonus(uint64 _totalBonusX64, uint64 _compounderBonusX64) external onlyOwner {
+        require(_totalBonusX64 <= totalBonusX64, ">previoustotal");
+        require(_compounderBonusX64 <= _totalBonusX64, "compounder>total");
+        totalBonusX64 = _totalBonusX64;
+        compounderBonusX64 = _compounderBonusX64;
+        emit BonusUpdated(msg.sender, _totalBonusX64, _compounderBonusX64);
+    }
+
+    /**
+     * @notice Management method to change the min ratio to decide when a swap is executed
+     */
+    function setMinSwapRatio(uint64 _minSwapRatioX64) external onlyOwner {
+        minSwapRatioX64 = _minSwapRatioX64;
+        emit MinSwapRatioUpdated(msg.sender, _minSwapRatioX64);
+    }
+
+    /**
+     * @notice Creates a new position swapping to the correct ratio and adds it to be autocompounded
+     */
+    function swapAndMint(SwapAndMintParams calldata params) external payable override nonReentrant
+        returns (
+            uint256 tokenId,
+            uint128 liquidity,
+            uint256 amount0,
+            uint256 amount1
+        )
+    {
+        require(params.token0 != params.token1, "token0=token1");
+
+        _prepareAdd(params.token0, params.token1, params.amount0, params.amount1);
+
+        (uint256 swappedAmount0, uint256 swappedAmount1) = _swapToPriceRatio(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, params.amount0, params.amount1, params.deadline);
+
+        INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, swappedAmount0, swappedAmount1, 0, 0, address(this), params.deadline);
+
+        (tokenId, liquidity, amount0, amount1) = nonfungiblePositionManager.mint(mintParams);
+
+        _addToken(tokenId, params.recipient, false);
+
+        // store balance in favor
+        userBalances[params.recipient][params.token0] = swappedAmount0.sub(amount0);
+        userBalances[params.recipient][params.token1] = swappedAmount1.sub(amount1);
+    }
+
+    struct SwapAndIncreaseLiquidityState {
+        address token0;
+        address token1;
+        uint24 fee;
+        int24 tickLower;
+        int24 tickUpper;
+        uint256 swappedAmount0;
+        uint256 swappedAmount1;
+    }
+
+    /**
+     * @notice Increase liquidity in the correct ratio
+     */
+    function swapAndIncreaseLiquidity(SwapAndIncreaseLiquidityParams calldata params) external payable override nonReentrant
+        returns (
+            uint128 liquidity,
+            uint256 amount0,
+            uint256 amount1
+        )
+    {
+        SwapAndIncreaseLiquidityState memory state;
+
+        (, , state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, , , , , ) = nonfungiblePositionManager.positions(params.tokenId);
+
+        _prepareAdd(state.token0, state.token1, params.amount0, params.amount1);
+
+        (state.swappedAmount0, state.swappedAmount1) = _swapToPriceRatio(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, params.amount0, params.amount1, params.deadline);
+
+        INonfungiblePositionManager.IncreaseLiquidityParams memory increaseLiquidityParams = INonfungiblePositionManager.IncreaseLiquidityParams(params.tokenId, state.swappedAmount0, state.swappedAmount1, 0, 0, params.deadline);
+
+        (liquidity, amount0, amount1) = nonfungiblePositionManager.increaseLiquidity(increaseLiquidityParams);
+
+        // store balance in favor
+        userBalances[msg.sender][state.token0] = state.swappedAmount0.sub(amount0);
+        userBalances[msg.sender][state.token1] = state.swappedAmount1.sub(amount1);
+    }
+
+    /**
+     * @notice Special method to decrease liquidity and collect decreased amount  - can only be called by owner
+     * Needs to do collect at the same time, otherwise the available amount would be autocompoundable
+     */
+    function decreaseLiquidityAndCollect(INonfungiblePositionManager.DecreaseLiquidityParams calldata params, address recipient) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
+        require(ownerOf[params.tokenId] == msg.sender, "!owner");
+        (amount0, amount1) = nonfungiblePositionManager.decreaseLiquidity(params);
+        INonfungiblePositionManager.CollectParams memory collectParams = INonfungiblePositionManager.CollectParams(params.tokenId, recipient, LiquidityAmounts.toUint128(amount0), LiquidityAmounts.toUint128(amount1));
+        nonfungiblePositionManager.collect(collectParams);
+    }
+
+    /**
+     * @notice Forwards collect call to NonfungiblePositionManager - can only be called by owner
+     */
+    function collect(INonfungiblePositionManager.CollectParams calldata params) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
+        require(ownerOf[params.tokenId] == msg.sender, "!owner");
+        return nonfungiblePositionManager.collect(params);
+    }
+
+    /**
+     * @notice Main method to remove a NFT from the protocol
+     */
+    function withdrawToken(
+        uint256 tokenId,
+        address to,
+        bytes memory data,
+        bool withdrawBalances
+    ) external override nonReentrant {
+        require(to != address(this), "this");
+        require(ownerOf[tokenId] == msg.sender, "!owner");
+
+        _removeToken(msg.sender, tokenId);
+        nonfungiblePositionManager.safeTransferFrom(address(this), to, tokenId, data);
+        emit TokenWithdrawn(msg.sender, to, tokenId);
+
+        if (withdrawBalances) {
+            (, , address token0, address token1, , , , , , , , ) = nonfungiblePositionManager.positions(tokenId);
+            _withdrawFullBalances(token0, token1, to);
+        }
+    }
+
+    /**
+     * @notice Withdraws token balance of a user
+     */
+    function withdrawBalance(address token, address to, uint256 amount) external nonReentrant {
+        require(amount > 0, "amount=0");
+        uint256 balance = userBalances[msg.sender][token];
+        _withdrawBalanceInternal(token, to, balance, amount);
+    }
+
+
+
+
+    function _withdrawFullBalances(address token0, address token1, address to) internal {
+        uint256 balance0 = userBalances[msg.sender][token0];
+        if (balance0 > 0) {
+            _withdrawBalanceInternal(token0, to, balance0, balance0);
+        }
+        uint256 balance1 = userBalances[msg.sender][token1];
+        if (balance1 > 0) {
+            _withdrawBalanceInternal(token1, to, balance1, balance1);
+        }
+    }
+
+    function _withdrawBalanceInternal(address token, address to, uint256 balance, uint256 amount) internal {
+        require(amount <= balance, ">balance");
+        userBalances[msg.sender][token] = userBalances[msg.sender][token].sub(amount);
+        SafeERC20.safeTransfer(IERC20(token), to, amount);
+        emit BalanceWithdrawn(msg.sender, token, to, amount);
+    }
+
+    function _prepareAdd(address token0, address token1, uint amount0, uint amount1) internal {
+          // wrap ether sent
+        if (msg.value > 0) {
+            (bool success,) = payable(weth).call{ value: msg.value }("");
+            require(success, "wrap eth fail");
+        }
+
+        // get missing tokens
+        if (amount0 > 0) {
+            IERC20(token0).transferFrom(msg.sender, address(this), (weth == token0 ? amount0.sub(msg.value) : amount0));
+        }
+        if (amount1 > 0) {
+            IERC20(token1).transferFrom(msg.sender, address(this), (weth == token1 ? amount1.sub(msg.value) : amount1));
+        }
+
+        _checkApprovals(IERC20(token0), IERC20(token1));
+    }
+
+    function _swap(bytes memory swapPath, uint256 amount, uint256 deadline) internal returns (uint256 amountOut) {
+        if (amount > 0) {
+            amountOut = swapRouter.exactInput(
+                ISwapRouter.ExactInputParams(swapPath, address(this), deadline, amount, 0)
+            );
+        }
+    }
+
+    function _addToken(uint256 tokenId, address account, bool checkApprovals) internal {
+
+        // get tokens for this nft
+        (, , address token0, address token1, , , , , , , , ) = nonfungiblePositionManager.positions(tokenId);
+
+        if (checkApprovals) {
+            _checkApprovals(IERC20(token0), IERC20(token1));
+        }
+
+        userTokens[account].push(tokenId);
+        ownerOf[tokenId] = account;
+    }
+
+    function _checkApprovals(IERC20 token0, IERC20 token1) internal {
+        // approve tokens once if not yet approved
+        uint256 allowance0 = token0.allowance(address(this), address(nonfungiblePositionManager));
+        if (allowance0 == 0) {
+            SafeERC20.safeApprove(token0, address(nonfungiblePositionManager), type(uint256).max);
+            SafeERC20.safeApprove(token0, address(swapRouter), type(uint256).max);
+        }
+        uint256 allowance1 = token1.allowance(address(this), address(nonfungiblePositionManager));
+        if (allowance1 == 0) {
+            SafeERC20.safeApprove(token1, address(nonfungiblePositionManager), type(uint256).max);
+            SafeERC20.safeApprove(token1, address(swapRouter), type(uint256).max);
+        }
+    }
+
+    function _removeToken(address account, uint256 tokenId) internal {
+        uint256[] memory userTokensArr = userTokens[account];
+        uint256 len = userTokensArr.length;
+        uint256 assetIndex = len;
+
+        for (uint256 i = 0; i < len; i++) {
+            if (userTokensArr[i] == tokenId) {
+                assetIndex = i;
+                break;
+            }
+        }
+
+        assert(assetIndex < len);
+
+        uint256[] storage storedList = userTokens[account];
+        storedList[assetIndex] = storedList[storedList.length - 1];
+        storedList.pop();
+
+        delete ownerOf[tokenId];
     }
 
     function _getTWAPTick(IUniswapV3Pool pool) internal view returns (int24) {
@@ -284,231 +517,5 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         }
 
         return (amount0, amount1);
-    }
-
-    /**
-     * @notice Management method to lower fees or change ratio between total and compounder fees
-     */
-    function setBonus(uint64 _totalBonusX64, uint64 _compounderBonusX64) external onlyOwner {
-        require(_totalBonusX64 <= totalBonusX64, ">previoustotal");
-        require(_compounderBonusX64 <= _totalBonusX64, "compounder>total");
-        totalBonusX64 = _totalBonusX64;
-        compounderBonusX64 = _compounderBonusX64;
-        emit BonusUpdated(msg.sender, _totalBonusX64, _compounderBonusX64);
-    }
-
-    /**
-     * @notice Management method to change the min ratio to decide when a swap is executed
-     */
-    function setMinSwapRatio(uint64 _minSwapRatioX64) external onlyOwner {
-        minSwapRatioX64 = _minSwapRatioX64;
-        emit MinSwapRatioUpdated(msg.sender, _minSwapRatioX64);
-    }
-
-    function _swap(bytes memory swapPath, uint256 amount, uint256 deadline) internal returns (uint256 amountOut) {
-        if (amount > 0) {
-            amountOut = swapRouter.exactInput(
-                ISwapRouter.ExactInputParams(swapPath, address(this), deadline, amount, 0)
-            );
-        }
-    }
-
-    function _addToken(uint256 tokenId, address account, bool checkApprovals) internal {
-
-        // get tokens for this nft
-        (, , address token0, address token1, , , , , , , , ) = nonfungiblePositionManager.positions(tokenId);
-
-        if (checkApprovals) {
-            _checkApprovals(IERC20(token0), IERC20(token1));
-        }
-
-        userTokens[account].push(tokenId);
-        ownerOf[tokenId] = account;
-    }
-
-    function _checkApprovals(IERC20 token0, IERC20 token1) internal {
-        // approve tokens if not yet approved
-        uint256 allowance0 = token0.allowance(address(this), address(nonfungiblePositionManager));
-        if (allowance0 == 0) {
-            SafeERC20.safeApprove(token0, address(nonfungiblePositionManager), type(uint256).max);
-            SafeERC20.safeApprove(token0, address(swapRouter), type(uint256).max);
-        }
-        uint256 allowance1 = token1.allowance(address(this), address(nonfungiblePositionManager));
-        if (allowance1 == 0) {
-            SafeERC20.safeApprove(token1, address(nonfungiblePositionManager), type(uint256).max);
-            SafeERC20.safeApprove(token1, address(swapRouter), type(uint256).max);
-        }
-    }
-
-    function _removeToken(address account, uint256 tokenId) internal {
-        uint256[] memory userTokensArr = userTokens[account];
-        uint256 len = userTokensArr.length;
-        uint256 assetIndex = len;
-
-        for (uint256 i = 0; i < len; i++) {
-            if (userTokensArr[i] == tokenId) {
-                assetIndex = i;
-                break;
-            }
-        }
-
-        assert(assetIndex < len);
-
-        uint256[] storage storedList = userTokens[account];
-        storedList[assetIndex] = storedList[storedList.length - 1];
-        storedList.pop();
-
-        delete ownerOf[tokenId];
-    }
-
-    /**
-     * @notice Creates a new position swapping to the correct ratio and adds it to be autocompounded
-     */
-    function swapAndMint(SwapAndMintParams calldata params) external payable override nonReentrant
-        returns (
-            uint256 tokenId,
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        )
-    {
-        require(params.token0 != params.token1, "token0=token1");
-
-        _prepareAdd(params.token0, params.token1, params.amount0, params.amount1);
-
-        (uint256 swappedAmount0, uint256 swappedAmount1) = _swapToPriceRatio(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, params.amount0, params.amount1, params.deadline);
-
-        INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, swappedAmount0, swappedAmount1, 0, 0, address(this), params.deadline);
-
-        (tokenId, liquidity, amount0, amount1) = nonfungiblePositionManager.mint(mintParams);
-
-        _addToken(tokenId, params.recipient, false);
-
-        // store balance in favor
-        userBalances[params.recipient][params.token0] = swappedAmount0.sub(amount0);
-        userBalances[params.recipient][params.token1] = swappedAmount1.sub(amount1);
-    }
-
-    struct SwapAndIncreaseLiquidityState {
-        address token0;
-        address token1;
-        uint24 fee;
-        int24 tickLower;
-        int24 tickUpper;
-        uint256 swappedAmount0;
-        uint256 swappedAmount1;
-    }
-
-    /**
-     * @notice Increase liquidity in the correct ratio
-     */
-    function swapAndIncreaseLiquidity(SwapAndIncreaseLiquidityParams calldata params) external payable override nonReentrant
-        returns (
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        )
-    {
-        SwapAndIncreaseLiquidityState memory state;
-
-        (, , state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, , , , , ) = nonfungiblePositionManager.positions(params.tokenId);
-
-        _prepareAdd(state.token0, state.token1, params.amount0, params.amount1);
-
-        (state.swappedAmount0, state.swappedAmount1) = _swapToPriceRatio(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, params.amount0, params.amount1, params.deadline);
-
-        INonfungiblePositionManager.IncreaseLiquidityParams memory increaseLiquidityParams = INonfungiblePositionManager.IncreaseLiquidityParams(params.tokenId, state.swappedAmount0, state.swappedAmount1, 0, 0, params.deadline);
-
-        (liquidity, amount0, amount1) = nonfungiblePositionManager.increaseLiquidity(increaseLiquidityParams);
-
-        // store balance in favor
-        userBalances[msg.sender][state.token0] = state.swappedAmount0.sub(amount0);
-        userBalances[msg.sender][state.token1] = state.swappedAmount1.sub(amount1);
-    }
-
-    function _prepareAdd(address token0, address token1, uint amount0, uint amount1) internal {
-          // wrap ether sent
-        if (msg.value > 0) {
-            (bool success,) = payable(weth).call{ value: msg.value }("");
-            require(success, "wrap eth fail");
-        }
-
-        // get missing tokens
-        if (amount0 > 0) {
-            IERC20(token0).transferFrom(msg.sender, address(this), (weth == token0 ? amount0.sub(msg.value) : amount0));
-        }
-        if (amount1 > 0) {
-            IERC20(token1).transferFrom(msg.sender, address(this), (weth == token1 ? amount1.sub(msg.value) : amount1));
-        }
-
-        _checkApprovals(IERC20(token0), IERC20(token1));
-     }
-
-    /**
-     * @notice Special method to decrease liquidity and collect decreased amount
-     * Needs to do collect at the same time, otherwise the available amount would be autocompoundable
-     */
-    function decreaseLiquidityAndCollect(INonfungiblePositionManager.DecreaseLiquidityParams calldata params, address recipient) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
-        require(ownerOf[params.tokenId] == msg.sender, "!owner");
-        (amount0, amount1) = nonfungiblePositionManager.decreaseLiquidity(params);
-        INonfungiblePositionManager.CollectParams memory collectParams = INonfungiblePositionManager.CollectParams(params.tokenId, recipient, LiquidityAmounts.toUint128(amount0), LiquidityAmounts.toUint128(amount1));
-        nonfungiblePositionManager.collect(collectParams);
-    }
-
-    /**
-     * @notice Forwards collect call to NonfungiblePositionManager - can only be called by owner
-     */
-    function collect(INonfungiblePositionManager.CollectParams calldata params) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
-        require(ownerOf[params.tokenId] == msg.sender, "!owner");
-        return nonfungiblePositionManager.collect(params);
-    }
-
-    /**
-     * @notice Main method to remove a NFT from the protocol
-     */
-    function withdrawToken(
-        uint256 tokenId,
-        address to,
-        bytes memory data,
-        bool withdrawBalances
-    ) external override nonReentrant {
-        require(to != address(this), "this");
-        require(ownerOf[tokenId] == msg.sender, "!owner");
-
-        _removeToken(msg.sender, tokenId);
-        nonfungiblePositionManager.safeTransferFrom(address(this), to, tokenId, data);
-        emit TokenWithdrawn(msg.sender, to, tokenId);
-
-        if (withdrawBalances) {
-            (, , address token0, address token1, , , , , , , , ) = nonfungiblePositionManager.positions(tokenId);
-            withdrawFullBalances(token0, token1, to);
-        }
-    }
-
-    /**
-     * @notice Withdraws token balance of a user
-     */
-    function withdrawBalance(address token, address to, uint256 amount) external nonReentrant {
-        require(amount > 0, "amount=0");
-        uint256 balance = userBalances[msg.sender][token];
-        withdrawBalanceInternal(token, to, balance, amount);
-    }
-
-    function withdrawFullBalances(address token0, address token1, address to) internal {
-        uint256 balance0 = userBalances[msg.sender][token0];
-        if (balance0 > 0) {
-            withdrawBalanceInternal(token0, to, balance0, balance0);
-        }
-        uint256 balance1 = userBalances[msg.sender][token1];
-        if (balance1 > 0) {
-            withdrawBalanceInternal(token1, to, balance1, balance1);
-        }
-    }
-
-    function withdrawBalanceInternal(address token, address to, uint256 balance, uint256 amount) internal {
-        require(amount <= balance, ">balance");
-        userBalances[msg.sender][token] = userBalances[msg.sender][token].sub(amount);
-        SafeERC20.safeTransfer(IERC20(token), to, amount);
-        emit BalanceWithdrawn(msg.sender, token, to, amount);
     }
 }

@@ -28,8 +28,20 @@ describe("AutoCompounder Tests", function () {
       [owner] = await ethers.getSigners();
   });
 
+  it("Test setBonus", async function () {
+    const maxBonus = await contract.MAX_BONUS_X64();
+    await expect(contract.setBonus(maxBonus.add(1), maxBonus.add(1))).to.be.reverted;
+    await contract.setBonus(maxBonus.sub(1), maxBonus.sub(2));
+    expect(await contract.totalBonusX64()).to.equal(maxBonus.sub(1));
+    expect(await contract.compounderBonusX64()).to.equal(maxBonus.sub(2));
+    await expect(contract.setBonus(maxBonus, maxBonus)).to.be.reverted;
+    await contract.setBonus(0, 0);
+    expect(await contract.totalBonusX64()).to.equal(0);
+    expect(await contract.compounderBonusX64()).to.equal(0);
+  })
+
   it("Test swapAndMint", async function () {
-    const deadline = Math.floor(new Date().getTime() / 1000)
+    const deadline = await getDeadline()
     const usdc = await ethers.getContractAt("IERC20", usdcAddress);
     const weth = await ethers.getContractAt("IERC20", wethAddress);
 
@@ -67,15 +79,17 @@ describe("AutoCompounder Tests", function () {
     const nftId = 8
     const haydenSigner = await impersonateAccountAndGetSigner(haydenAddress)
 
-    const deadline = Math.floor(new Date().getTime() / 1000)
+    const deadline = await getDeadline()
    
+    expect(await contract.balanceOf(haydenAddress)).to.equal(0);
     await nonfungiblePositionManager.connect(haydenSigner)[["safeTransferFrom(address,address,uint256)"]](haydenAddress, contract.address, nftId);
+    expect(await contract.balanceOf(haydenAddress)).to.equal(1);
 
     // add liquidity (one)
     const usdc = await ethers.getContractAt("IERC20", usdcAddress);
     const usdt = await ethers.getContractAt("IERC20", usdtAddress);
-    const amount = BigNumber.from("1000000")
-    await usdc.connect(haydenSigner).approve(contract.address, amount)
+    const amount = BigNumber.from("100000000");
+    await usdc.connect(haydenSigner).approve(contract.address, amount);
     //await usdt.connect(haydenSigner).approve(contract.address, amount)
 
     await contract.connect(haydenSigner).swapAndIncreaseLiquidity({ tokenId: nftId, amount0: amount, amount1: "0", deadline});
@@ -87,7 +101,6 @@ describe("AutoCompounder Tests", function () {
     const gasCost = await contract.estimateGas.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
 
     const gasPrice = await ethers.provider.getGasPrice()
-    console.log("Gas Price", gasPrice)
     console.log("Execution cost:", ethers.utils.formatEther(gasPrice.mul(gasCost)))
 
     // simulate cost vs gains
@@ -114,6 +127,9 @@ describe("AutoCompounder Tests", function () {
   });
 });
 
+async function getDeadline() {
+  return (await ethers.provider.getBlock("latest")).timestamp + 300
+}
 
 async function impersonateAccountAndGetSigner(address) {
   await hre.network.provider.request({
