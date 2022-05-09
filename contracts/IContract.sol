@@ -11,23 +11,26 @@ import "./external/uniswap/v3-periphery/interfaces/ISwapRouter.sol";
 
 interface IContract is IERC721Receiver {
    
+    // config changes
     event BonusUpdated(address account, uint64 totalBonusX64, uint64 compounderBonusX64);
-
     event MinSwapRatioUpdated(address account, uint64 minSwapRatioX64);
+    event MaxTWAPTickDifferenceUpdated(address account, uint32 maxTWAPTickDifference);
 
+    // token movements
     event TokenDeposited(address account, uint256 tokenId);
-
     event TokenWithdrawn(address account, address to, uint256 tokenId);
 
+    // balance movements
     event BalanceWithdrawn(address account, address token, address to, uint256 amount);
 
+    // autocompound event
     event AutoCompounded(
         address account,
         uint256 tokenId,
-        uint256 amountDeposited0,
-        uint256 amountDeposited1,
-        uint256 amountReturned0,
-        uint256 amountReturned1
+        uint256 amountAdded0,
+        uint256 amountAdded1,
+        uint256 bonus0,
+        uint256 bonus1
     );
 
     /// @notice The weth address
@@ -42,16 +45,23 @@ interface IContract is IERC721Receiver {
     /// @notice The nonfungible position manager address with which this staking contract is compatible
     function swapRouter() external view returns (ISwapRouter);
 
-    /// @notice Returns the owner of the deposited NFT
+    /// @notice Owner of a managed NFT
     function ownerOf(uint256 tokenId) external view returns (address owner);
 
-    // @notice Number of deposited tokens of account
-    function balanceOf(address account) external view returns (uint256 length);
+    /**
+     * @notice Returns amount of NFTs for a given account
+     * @param account Address of account
+     * @return balance amount of NFTs for account
+     */
+    function balanceOf(address account) external view returns (uint256 balance);
 
-    /// @notice Withdraws a Uniswap V3 LP token `tokenId` from this contract to the recipient `to`
-    /// @param tokenId The unique identifier of an Uniswap V3 LP token
-    /// @param to The address where the LP token will be sent
-    /// @param data An optional data array that will be passed along to the `to` address via the NFT safeTransferFrom
+    /**
+     * @notice Removes a NFT from the protocol and safe transfers it to address to
+     * @param tokenId TokenId of token to remove
+     * @param to Address to send to
+     * @param data data which is sent with the safeTransferFrom call (optional)
+     * @param withdrawBalances When true sends the available balances for token0 and token1 as well
+     */
     function withdrawToken(
         uint256 tokenId,
         address to,
@@ -59,9 +69,10 @@ interface IContract is IERC721Receiver {
         bool withdrawBalances
     ) external;
 
-    // how bonus should be converted
+    /// @notice how bonus should be converted
     enum BonusConversion { NONE, TOKEN_0, TOKEN_1 }
 
+    /// @notice params for autoCompound()
     struct AutoCompoundParams {
         // tokenid to autocompound
         uint256 tokenId;
@@ -76,11 +87,15 @@ interface IContract is IERC721Receiver {
         uint256 deadline;
     }
 
-    // automatically compound fees back into range
-    /// @return bonus0 The amount of token0 you get as a bonus for autocompounding
-    /// @return bonus1 The amount of token1 you get as a bonus for autocompounding
+    /**
+     * @notice Autocompounds for a given NFT (anyone can call this and gets a percentage of the fees)
+     * @param params Autocompound specific parameters (tokenId, ...)
+     * @return bonus0 Amount of token0 caller recieves
+     * @return bonus1 Amount of token1 caller recieves
+     */
     function autoCompound(AutoCompoundParams calldata params) external returns (uint256 bonus0, uint256 bonus1);
 
+    /// @notice params for swapAndMint()
     struct SwapAndMintParams {
         address token0;
         address token1;
@@ -93,14 +108,14 @@ interface IContract is IERC721Receiver {
         uint256 deadline;
     }
     
-    /// @notice Creates a new position wrapped in a NFT - swaps to the correct ratio and adds it to be autocompounded
-    /// @dev Call this when the pool does exist and is initialized. Note that if the pool is created but not initialized
-    /// a method does not exist, i.e. the pool is assumed to be initialized.
-    /// @param params The params necessary to mint a position, encoded as `MintParams` in calldata
-    /// @return tokenId The ID of the token that represents the minted position
-    /// @return liquidity The amount of liquidity for this position
-    /// @return amount0 The amount of token0
-    /// @return amount1 The amount of token1
+    /**
+     * @notice Creates new position (for a already existing pool) swapping to correct ratio and adds it to be autocompounded
+     * @param params Specifies details for position to create and how much of each token is provided (ETH is automatically wrapped)
+     * @return tokenId tokenId of created position
+     * @return liquidity amount of liquidity added
+     * @return amount0 amount of token0 added
+     * @return amount1 amount of token1 added
+     */
     function swapAndMint(SwapAndMintParams calldata params)
         external
         payable
@@ -111,6 +126,7 @@ interface IContract is IERC721Receiver {
             uint256 amount1
         );
 
+    /// @notice params for swapAndIncreaseLiquidity()
     struct SwapAndIncreaseLiquidityParams {
         uint256 tokenId;
         uint256 amount0;
@@ -118,11 +134,13 @@ interface IContract is IERC721Receiver {
         uint256 deadline;
     }
 
-    /// @notice Swaps to the correct ratio and adds liquidity to a position
-    /// @param params The params necessary to mint a position, encoded as `SwapAndIncreaseLiquidityParams` in calldata
-    /// @return liquidity The amount of liquidity for this position
-    /// @return amount0 The amount of token0
-    /// @return amount1 The amount of token1
+    /**
+     * @notice Increase liquidity in the correct ratio
+     * @param params Specifies tokenId and much of each token is provided (ETH is automatically wrapped)
+     * @return liquidity amount of liquidity added
+     * @return amount0 amount of token0 added
+     * @return amount1 amount of token1 added
+     */
     function swapAndIncreaseLiquidity(SwapAndIncreaseLiquidityParams calldata params)
         external
         payable
@@ -132,25 +150,23 @@ interface IContract is IERC721Receiver {
             uint256 amount1
         );
 
-    /// @notice Decreases the amount of liquidity in a position and accounts it to the position
-    /// @param params tokenId The ID of the token for which liquidity is being decreased,
-    /// amount The amount by which liquidity will be decreased,
-    /// amount0Min The minimum amount of token0 that should be accounted for the burned liquidity,
-    /// amount1Min The minimum amount of token1 that should be accounted for the burned liquidity,
-    /// deadline The time by which the transaction must be included to effect the change
-    /// @return amount0 The amount of token0 accounted to the position's tokens owed
-    /// @return amount1 The amount of token1 accounted to the position's tokens owed
+    /**
+     * @notice Special method to decrease liquidity and collect decreased amount - can only be called by owner
+     * @dev Needs to do collect at the same time, otherwise the available amount would be autocompoundable
+     * @param params INonfungiblePositionManager.DecreaseLiquidityParams which are forwarded to the Uniswap V3 NonfungiblePositionManager
+     * @return amount0 amount of token0 removed and collected
+     * @return amount1 amount of token1 removed and collected
+     */
     function decreaseLiquidityAndCollect(INonfungiblePositionManager.DecreaseLiquidityParams calldata params, address recipient)
         external
         payable
         returns (uint256 amount0, uint256 amount1);
 
-    /// @notice Collects up to a maximum amount of fees owed to a specific position to the recipient
-    /// @param params tokenId The ID of the NFT for which tokens are being collected,
-    /// recipient The account that should receive the tokens,
-    /// amount0Max The maximum amount of token0 to collect,
-    /// amount1Max The maximum amount of token1 to collect
-    /// @return amount0 The amount of fees collected in token0
-    /// @return amount1 The amount of fees collected in token1
+    /**
+     * @notice Forwards collect call to NonfungiblePositionManager - can only be called by owner
+     * @param params INonfungiblePositionManager.CollectParams which are forwarded to the Uniswap V3 NonfungiblePositionManager
+     * @return amount0 amount of token0 collected
+     * @return amount1 amount of token1 collected
+     */
     function collect(INonfungiblePositionManager.CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
 }

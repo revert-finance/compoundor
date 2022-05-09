@@ -34,7 +34,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     uint64 public compounderBonusX64 = MAX_BONUS_X64 / 5; // 1%
     uint64 public minSwapRatioX64 = uint64(EXP_64 / 40); // 2.5%
     uint32 public maxTWAPTickDifference = 100; // 1%
-    uint32 public maxSwapTickDifference = 100; // 1%
 
     // wrapped native token address
     address override public weth;
@@ -56,7 +55,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     /**
-     * @notice Main method to handle adding NFTs to the protocol
+     * @dev When receiving a Uniswap V3 NFT, deposits token with `from` as owner
      */
     function onERC721Received(
         address,
@@ -73,8 +72,10 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
     /**
      * @notice Returns amount of NFTs for a given account
+     * @param account Address of account
+     * @return balance amount of NFTs for account
      */
-    function balanceOf(address account) override external view returns (uint256 length) {
+    function balanceOf(address account) override external view returns (uint256 balance) {
         return userTokens[account].length;
     }
 
@@ -97,8 +98,10 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     /**
-     * @notice Autocompounds for a given token (anyone can call this and get credited fee tokens)
-     * @param params Specifies how autocompound should be done
+     * @notice Autocompounds for a given NFT (anyone can call this and gets a percentage of the fees)
+     * @param params Autocompound specific parameters (tokenId, ...)
+     * @return bonus0 Amount of token0 caller recieves
+     * @return bonus1 Amount of token1 caller recieves
      */
     function autoCompound(AutoCompoundParams calldata params) override external nonReentrant returns (uint256 bonus0, uint256 bonus1) {
 
@@ -219,7 +222,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     /**
-     * @notice Management method to lower fees or change ratio between total and compounder fees
+     * @notice Management method to lower bonus or change ratio between total and compounder bonus (onlyOwner)
+     * @param _totalBonusX64 new total bonus (can't be higher than current total bonus)
+     * @param _compounderBonusX64 new compounder bonus
      */
     function setBonus(uint64 _totalBonusX64, uint64 _compounderBonusX64) external onlyOwner {
         require(_totalBonusX64 <= totalBonusX64, ">previoustotal");
@@ -230,7 +235,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     /**
-     * @notice Management method to change the min ratio to decide when a swap is executed
+     * @notice Management method to change the min ratio to decide when a swap is executed (onlyOwner)
+     * @param _minSwapRatioX64 new min swap ratio
      */
     function setMinSwapRatio(uint64 _minSwapRatioX64) external onlyOwner {
         minSwapRatioX64 = _minSwapRatioX64;
@@ -238,7 +244,28 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     /**
-     * @notice Creates a new position swapping to the correct ratio and adds it to be autocompounded
+     * @notice Management method to change the max tick difference from twap to allow swaps (onlyOwner)
+     * @param _maxTWAPTickDifference new max tick difference
+     */
+    function setMaxTWAPTickDifference(uint32 _maxTWAPTickDifference) external onlyOwner {
+        maxTWAPTickDifference = _maxTWAPTickDifference;
+        emit MaxTWAPTickDifferenceUpdated(msg.sender, _maxTWAPTickDifference);
+    }
+
+    struct SwapAndMintState {
+        uint256 addedAmount0;
+        uint256 addedAmount1;
+        uint256 swappedAmount0;
+        uint256 swappedAmount1;
+    }
+
+    /**
+     * @notice Creates new position (for a already existing pool) swapping to correct ratio and adds it to be autocompounded
+     * @param params Specifies details for position to create and how much of each token is provided (ETH is automatically wrapped)
+     * @return tokenId tokenId of created position
+     * @return liquidity amount of liquidity added
+     * @return amount0 amount of token0 added
+     * @return amount1 amount of token1 added
      */
     function swapAndMint(SwapAndMintParams calldata params) external payable override nonReentrant
         returns (
@@ -248,21 +275,23 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             uint256 amount1
         )
     {
+        SwapAndMintState memory state;
+
         require(params.token0 != params.token1, "token0=token1");
 
-        _prepareAdd(params.token0, params.token1, params.amount0, params.amount1);
+        (state.addedAmount0, state.addedAmount1) = _prepareAdd(params.token0, params.token1, params.amount0, params.amount1);
 
-        (uint256 swappedAmount0, uint256 swappedAmount1) = _swapToPriceRatio(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, params.amount0, params.amount1, params.deadline);
+        (state.swappedAmount0, state.swappedAmount1) = _swapToPriceRatio(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, state.addedAmount0, state.addedAmount1, params.deadline);
 
-        INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, swappedAmount0, swappedAmount1, 0, 0, address(this), params.deadline);
+        INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, state.swappedAmount0, state.swappedAmount1, 0, 0, address(this), params.deadline);
 
         (tokenId, liquidity, amount0, amount1) = nonfungiblePositionManager.mint(mintParams);
 
         _addToken(tokenId, params.recipient, false);
 
         // store balance in favor
-        userBalances[params.recipient][params.token0] = swappedAmount0.sub(amount0);
-        userBalances[params.recipient][params.token1] = swappedAmount1.sub(amount1);
+        userBalances[params.recipient][params.token0] = state.swappedAmount0.sub(amount0);
+        userBalances[params.recipient][params.token1] = state.swappedAmount1.sub(amount1);
     }
 
     struct SwapAndIncreaseLiquidityState {
@@ -271,12 +300,18 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint24 fee;
         int24 tickLower;
         int24 tickUpper;
+        uint256 addedAmount0;
+        uint256 addedAmount1;
         uint256 swappedAmount0;
         uint256 swappedAmount1;
     }
 
     /**
      * @notice Increase liquidity in the correct ratio
+     * @param params Specifies tokenId and much of each token is provided (ETH is automatically wrapped)
+     * @return liquidity amount of liquidity added
+     * @return amount0 amount of token0 added
+     * @return amount1 amount of token1 added
      */
     function swapAndIncreaseLiquidity(SwapAndIncreaseLiquidityParams calldata params) external payable override nonReentrant
         returns (
@@ -289,9 +324,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
         (, , state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, , , , , ) = nonfungiblePositionManager.positions(params.tokenId);
 
-        _prepareAdd(state.token0, state.token1, params.amount0, params.amount1);
+        (state.addedAmount0, state.addedAmount1) = _prepareAdd(state.token0, state.token1, params.amount0, params.amount1);
 
-        (state.swappedAmount0, state.swappedAmount1) = _swapToPriceRatio(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, params.amount0, params.amount1, params.deadline);
+        (state.swappedAmount0, state.swappedAmount1) = _swapToPriceRatio(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.addedAmount0, state.addedAmount1, params.deadline);
 
         INonfungiblePositionManager.IncreaseLiquidityParams memory increaseLiquidityParams = INonfungiblePositionManager.IncreaseLiquidityParams(params.tokenId, state.swappedAmount0, state.swappedAmount1, 0, 0, params.deadline);
 
@@ -303,8 +338,11 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     /**
-     * @notice Special method to decrease liquidity and collect decreased amount  - can only be called by owner
-     * Needs to do collect at the same time, otherwise the available amount would be autocompoundable
+     * @notice Special method to decrease liquidity and collect decreased amount - can only be called by owner
+     * @dev Needs to do collect at the same time, otherwise the available amount would be autocompoundable
+     * @param params INonfungiblePositionManager.DecreaseLiquidityParams which are forwarded to the Uniswap V3 NonfungiblePositionManager
+     * @return amount0 amount of token0 removed and collected
+     * @return amount1 amount of token1 removed and collected
      */
     function decreaseLiquidityAndCollect(INonfungiblePositionManager.DecreaseLiquidityParams calldata params, address recipient) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
         require(ownerOf[params.tokenId] == msg.sender, "!owner");
@@ -315,6 +353,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
     /**
      * @notice Forwards collect call to NonfungiblePositionManager - can only be called by owner
+     * @param params INonfungiblePositionManager.CollectParams which are forwarded to the Uniswap V3 NonfungiblePositionManager
+     * @return amount0 amount of token0 collected
+     * @return amount1 amount of token1 collected
      */
     function collect(INonfungiblePositionManager.CollectParams calldata params) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
         require(ownerOf[params.tokenId] == msg.sender, "!owner");
@@ -322,7 +363,11 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     /**
-     * @notice Main method to remove a NFT from the protocol
+     * @notice Removes a NFT from the protocol and safe transfers it to address to
+     * @param tokenId TokenId of token to remove
+     * @param to Address to send to
+     * @param data data which is sent with the safeTransferFrom call (optional)
+     * @param withdrawBalances When true sends the available balances for token0 and token1 as well
      */
     function withdrawToken(
         uint256 tokenId,
@@ -344,16 +389,16 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     /**
-     * @notice Withdraws token balance of a user
+     * @notice Withdraws token balance for a address and token
+     * @param token Address of token to withdraw
+     * @param to Address to send to
+     * @param amount amount to withdraw
      */
     function withdrawBalance(address token, address to, uint256 amount) external nonReentrant {
         require(amount > 0, "amount=0");
         uint256 balance = userBalances[msg.sender][token];
         _withdrawBalanceInternal(token, to, balance, amount);
     }
-
-
-
 
     function _withdrawFullBalances(address token0, address token1, address to) internal {
         uint256 balance0 = userBalances[msg.sender][token0];
@@ -373,19 +418,30 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         emit BalanceWithdrawn(msg.sender, token, to, amount);
     }
 
-    function _prepareAdd(address token0, address token1, uint amount0, uint amount1) internal {
+    // prepares adding specified amounts, handles weth wrapping, handles cases when more than necesary is added
+    function _prepareAdd(address token0, address token1, uint amount0, uint amount1) internal returns (uint amountAdded0, uint amountAdded1) {
           // wrap ether sent
         if (msg.value > 0) {
             (bool success,) = payable(weth).call{ value: msg.value }("");
             require(success, "wrap eth fail");
+
+            if (weth == token0) {
+                amountAdded0 = msg.value;
+            } else if (weth == token1) {
+                amountAdded1 = msg.value;
+            } else {
+                revert("no weth token");
+            }
         }
 
-        // get missing tokens
-        if (amount0 > 0) {
-            IERC20(token0).transferFrom(msg.sender, address(this), (weth == token0 ? amount0.sub(msg.value) : amount0));
+        // get missing tokens (fails if not enough provided)
+        if (amount0 > amountAdded0) {
+            IERC20(token0).transferFrom(msg.sender, address(this), amount0.sub(amountAdded0));
+            amountAdded0 = amount0;
         }
-        if (amount1 > 0) {
-            IERC20(token1).transferFrom(msg.sender, address(this), (weth == token1 ? amount1.sub(msg.value) : amount1));
+        if (amount1 > amountAdded1) {
+            IERC20(token1).transferFrom(msg.sender, address(this), amount1.sub(amountAdded1));
+            amountAdded1 = amount1;
         }
 
         _checkApprovals(IERC20(token0), IERC20(token1));
@@ -458,7 +514,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     function _requireMaxTickDifference(int24 tick, int24 other, uint32 maxDifference) internal pure {
         require(other > tick && (uint48(other - tick) < maxDifference) ||
         other <= tick && (uint48(tick - other) < maxDifference),
-        "TWAP err");
+        "price err");
     }
 
     function _swapToPriceRatio(address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint256 amount0, uint256 amount1, uint256 deadline) internal returns (uint256, uint256) {
@@ -470,7 +526,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
         (state.sqrtPriceX96,state.tick,,,,,) = pool.slot0();
 
-        // check that price is not too far from TWAP
+        // check that price is not too far from TWAP (protect from price manipulation attacks)
         state.otherTick = _getTWAPTick(pool);
         _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
 
@@ -510,10 +566,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 amount0 = amount0.add(amountOut);
                 amount1 = amount1.sub(state.delta1);
             }
-
-            // check that price did not move to far from swap
-            (,state.otherTick,,,,,) = pool.slot0();
-            _requireMaxTickDifference(state.tick, state.otherTick, maxSwapTickDifference);
         }
 
         return (amount0, amount1);
