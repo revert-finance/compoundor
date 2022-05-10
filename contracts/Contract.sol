@@ -31,6 +31,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
     // max positions
     uint32 constant public MAX_POSITIONS_PER_ADDRESS = 100;
+    uint32 constant public MAX_DEADLINE_IN_FUTURE = 500;
 
     // changable config values
     uint64 public totalBonusX64 = MAX_BONUS_X64; // 5%
@@ -48,7 +49,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
     mapping(uint256 => address) public override ownerOf;
     mapping(address => uint256[]) public userTokens;
-    mapping(address => mapping(address => uint256)) public userBalances;
+    mapping(address => mapping(address => uint256)) public userTokenBalances;
 
     constructor(address _weth, IUniswapV3Factory _factory, INonfungiblePositionManager _nonfungiblePositionManager, ISwapRouter _swapRouter) {
         weth = _weth;
@@ -110,7 +111,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     function autoCompound(AutoCompoundParams calldata params) override external nonReentrant returns (uint256 bonus0, uint256 bonus1) {
 
         require(ownerOf[params.tokenId] != address(0), "!found");
-        require(params.deadline < block.timestamp + 500, "deadline>=timestamp-500");
+        require(params.deadline < block.timestamp + MAX_DEADLINE_IN_FUTURE, "deadline>allowed");
 
         AutoCompoundState memory state;
 
@@ -124,8 +125,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         state.tokenOwner = ownerOf[params.tokenId];
 
         // add previous balances from given tokens
-        state.amount0 = state.amount0.add(userBalances[state.tokenOwner][state.token0]);
-        state.amount1 = state.amount1.add(userBalances[state.tokenOwner][state.token1]);
+        state.amount0 = state.amount0.add(userTokenBalances[state.tokenOwner][state.token0]);
+        state.amount1 = state.amount1.add(userTokenBalances[state.tokenOwner][state.token1]);
 
         // only if there are balances to work with - start autocompounding process
         if (state.amount0 > 0 || state.amount1 > 0) {
@@ -135,22 +136,20 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             // swap to position ratio (considering estimated fee)
             (state.amount0, state.amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1) = _swapToPriceRatio(swapParams);
 
-            // only add liquitidy when enough tokens available (avoid rounding to 0 for very small amounts)
-            if (!(state.amount0 > 0 && state.maxAddAmount0 == 0 || state.amount1 > 0 && state.maxAddAmount1 == 0)) {
-                // deposit liquidity into tokenId
-                (, state.amountAdded0, state.amountAdded1) = nonfungiblePositionManager.increaseLiquidity(
-                    INonfungiblePositionManager.IncreaseLiquidityParams(
-                        params.tokenId,
-                        state.maxAddAmount0,
-                        state.maxAddAmount1,
-                        0,
-                        0,
-                        params.deadline
-                    )
-                );
-            }
+            // deposit liquidity into tokenId
+            (, state.amountAdded0, state.amountAdded1) = nonfungiblePositionManager.increaseLiquidity(
+                INonfungiblePositionManager.IncreaseLiquidityParams(
+                    params.tokenId,
+                    state.maxAddAmount0,
+                    state.maxAddAmount1,
+                    0,
+                    0,
+                    params.deadline
+                )
+            );
 
-            // fees only when not tokenOwner
+            // fees are always calculated based on added amount
+            // only calculate them when not tokenOwner
             if (state.tokenOwner != msg.sender) {
                 if (params.bonusConversion == BonusConversion.NONE) {
                     state.amount0Fees = state.amountAdded0 * totalBonusX64 / EXP_64;
@@ -175,13 +174,13 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             }
 
             // calculate remaining tokens for owner
-            userBalances[state.tokenOwner][state.token0] = state.amount0.sub(state.amountAdded0).sub(state.amount0Fees);
-            userBalances[state.tokenOwner][state.token1] = state.amount1.sub(state.amountAdded1).sub(state.amount1Fees);
+            userTokenBalances[state.tokenOwner][state.token0] = state.amount0.sub(state.amountAdded0).sub(state.amount0Fees);
+            userTokenBalances[state.tokenOwner][state.token1] = state.amount1.sub(state.amountAdded1).sub(state.amount1Fees);
 
             // distribute fees -  handle 3 cases (contract owner / nft owner / oneone else)
             if (owner() == msg.sender) {
-                userBalances[msg.sender][state.token0] = userBalances[msg.sender][state.token0].add(state.amount0Fees);
-                userBalances[msg.sender][state.token1] = userBalances[msg.sender][state.token1].add(state.amount1Fees);
+                userTokenBalances[msg.sender][state.token0] = userTokenBalances[msg.sender][state.token0].add(state.amount0Fees);
+                userTokenBalances[msg.sender][state.token1] = userTokenBalances[msg.sender][state.token1].add(state.amount1Fees);
 
                 bonus0 = state.amount0Fees;
                 bonus1 = state.amount1Fees;
@@ -192,10 +191,10 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 uint256 compounderFees0 = state.amount0Fees * compounderBonusX64 / EXP_64;
                 uint256 compounderFees1 = state.amount1Fees * compounderBonusX64 / EXP_64;
 
-                userBalances[msg.sender][state.token0] = userBalances[msg.sender][state.token0].add(compounderFees0);
-                userBalances[msg.sender][state.token1] = userBalances[msg.sender][state.token1].add(compounderFees1);
-                userBalances[owner()][state.token0] = userBalances[owner()][state.token0].add(state.amount0Fees.sub(compounderFees0));
-                userBalances[owner()][state.token1] = userBalances[owner()][state.token1].add(state.amount1Fees.sub(compounderFees1));
+                userTokenBalances[msg.sender][state.token0] = userTokenBalances[msg.sender][state.token0].add(compounderFees0);
+                userTokenBalances[msg.sender][state.token1] = userTokenBalances[msg.sender][state.token1].add(compounderFees1);
+                userTokenBalances[owner()][state.token0] = userTokenBalances[owner()][state.token0].add(state.amount0Fees.sub(compounderFees0));
+                userTokenBalances[owner()][state.token1] = userTokenBalances[owner()][state.token1].add(state.amount1Fees.sub(compounderFees1));
 
                 bonus0 = compounderFees0;
                 bonus1 = compounderFees1;
@@ -263,7 +262,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             uint256 amount1
         )
     {
-        require(params.deadline < block.timestamp + 500, "deadline>=timestamp-500");
+        require(params.deadline < block.timestamp + MAX_DEADLINE_IN_FUTURE, "deadline>allowed");
         require(params.token0 != params.token1, "token0==token1");
 
         SwapAndMintState memory state;
@@ -280,8 +279,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         _addToken(tokenId, params.recipient, false);
 
         // store balance in favor
-        userBalances[params.recipient][params.token0] = state.swappedAmount0.sub(amount0);
-        userBalances[params.recipient][params.token1] = state.swappedAmount1.sub(amount1);
+        userTokenBalances[params.recipient][params.token0] = state.swappedAmount0.sub(amount0);
+        userTokenBalances[params.recipient][params.token1] = state.swappedAmount1.sub(amount1);
     }
 
     struct SwapAndIncreaseLiquidityState {
@@ -310,7 +309,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             uint256 amount1
         )
     {
-        require(params.deadline < block.timestamp + 500, "deadline>=timestamp-500");
+        require(params.deadline < block.timestamp + MAX_DEADLINE_IN_FUTURE, "deadline>allowed");
 
         SwapAndIncreaseLiquidityState memory state;
 
@@ -326,8 +325,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         (liquidity, amount0, amount1) = nonfungiblePositionManager.increaseLiquidity(increaseLiquidityParams);
 
         // store balance in favor
-        userBalances[msg.sender][state.token0] = state.swappedAmount0.sub(amount0);
-        userBalances[msg.sender][state.token1] = state.swappedAmount1.sub(amount1);
+        userTokenBalances[msg.sender][state.token0] = state.swappedAmount0.sub(amount0);
+        userTokenBalances[msg.sender][state.token1] = state.swappedAmount1.sub(amount1);
     }
 
     /**
@@ -389,16 +388,16 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
      */
     function withdrawBalance(address token, address to, uint256 amount) external nonReentrant {
         require(amount > 0, "amount==0");
-        uint256 balance = userBalances[msg.sender][token];
+        uint256 balance = userTokenBalances[msg.sender][token];
         _withdrawBalanceInternal(token, to, balance, amount);
     }
 
     function _withdrawFullBalances(address token0, address token1, address to) internal {
-        uint256 balance0 = userBalances[msg.sender][token0];
+        uint256 balance0 = userTokenBalances[msg.sender][token0];
         if (balance0 > 0) {
             _withdrawBalanceInternal(token0, to, balance0, balance0);
         }
-        uint256 balance1 = userBalances[msg.sender][token1];
+        uint256 balance1 = userTokenBalances[msg.sender][token1];
         if (balance1 > 0) {
             _withdrawBalanceInternal(token1, to, balance1, balance1);
         }
@@ -406,7 +405,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
     function _withdrawBalanceInternal(address token, address to, uint256 balance, uint256 amount) internal {
         require(amount <= balance, "amount>balance");
-        userBalances[msg.sender][token] = userBalances[msg.sender][token].sub(amount);
+        userTokenBalances[msg.sender][token] = userTokenBalances[msg.sender][token].sub(amount);
         SafeERC20.safeTransfer(IERC20(token), to, amount);
         emit BalanceWithdrawn(msg.sender, token, to, amount);
     }
