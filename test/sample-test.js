@@ -86,6 +86,7 @@ describe("AutoCompounder Tests", function () {
     // add ETH only
     await contract.connect(haydenSigner).swapAndIncreaseLiquidity({ tokenId: nftId, amount0: "0", amount1: "1000000000", deadline}, {value: "1000000000"});
 
+    // check bonus payouts
     const [bonus0a, bonus1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
     expect(bonus0a).to.gt(0)
     expect(bonus1a).to.eq(0)
@@ -143,6 +144,7 @@ describe("AutoCompounder Tests", function () {
 
     console.log("Execution gain:", gain0 + gain1)
 
+    // check bonus payouts
     const [bonus0a, bonus1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
     expect(bonus0a).to.gt(0)
     expect(bonus1a).to.gt(0)
