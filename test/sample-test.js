@@ -51,14 +51,18 @@ describe("AutoCompounder Tests", function () {
 
     const haydenSigner = await impersonateAccountAndGetSigner(haydenAddress)
 
-    const minTick = -800000;
-    const mediumTick = 0;
-    const maxTick = 800000;
-
     const token0 = usdcAddress
     const token1 = wethAddress
 
     const fee = 500
+
+    const poolAddress = await factory.getPool(token0, token1, fee);
+    const poolContract = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
+    const [,currentTick] = await poolContract.slot0()
+    
+    const minTick = -800000;
+    const mediumTick = currentTick - currentTick % 10; // account for tick spacing
+    const maxTick = 800000;
 
     // pure eth
     await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
@@ -73,6 +77,13 @@ describe("AutoCompounder Tests", function () {
     await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
     await weth.connect(haydenSigner).approve(contract.address, amountETH)
     await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: mediumTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: 0});
+
+    // autocompound directly after mint
+    expect(await contract.balanceOf(haydenAddress)).to.equal(3);
+    
+    const tokenId = await contract.userTokens(haydenAddress, 2);
+    await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
+
   })
 
   it("Test one sided liquidity position with hayden position 1", async function () {
