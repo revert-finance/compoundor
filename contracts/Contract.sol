@@ -278,6 +278,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
         _addToken(tokenId, params.recipient, false);
 
+        emit TokenDeposited(params.recipient, tokenId);
+
         // store balance in favor
         userTokenBalances[params.recipient][params.token0] = state.swappedAmount0.sub(amount0);
         userTokenBalances[params.recipient][params.token1] = state.swappedAmount1.sub(amount1);
@@ -437,14 +439,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         }
 
         _checkApprovals(IERC20(token0), IERC20(token1));
-    }
-
-    function _swap(bytes memory swapPath, uint256 amount, uint256 deadline) internal returns (uint256 amountOut) {
-        if (amount > 0) {
-            amountOut = swapRouter.exactInput(
-                ISwapRouter.ExactInputParams(swapPath, address(this), deadline, amount, 0)
-            );
-        }
     }
 
     function _addToken(uint256 tokenId, address account, bool checkApprovals) internal {
@@ -652,5 +646,13 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         }
 
         return (amount0, amount1, state.priceX96, state.positionAmount0, state.positionAmount1);
+    }
+
+    function _swap(bytes memory swapPath, uint256 amount, uint256 deadline) internal returns (uint256 amountOut) {
+        if (amount > 0) {
+            amountOut = swapRouter.exactInput(
+                ISwapRouter.ExactInputParams(swapPath, address(this), deadline, amount, 0)
+            );
+        }
     }
 }
