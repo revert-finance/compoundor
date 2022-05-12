@@ -132,10 +132,10 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         if (state.amount0 > 0 || state.amount1 > 0) {
 
             SwapParams memory swapParams = SwapParams(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.amount0, state.amount1, params.deadline, params.bonusConversion, state.tokenOwner == msg.sender, false);
-
+    
             // swap to position ratio (considering estimated fee)
             (state.amount0, state.amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1) = _swapToPriceRatio(swapParams);
-
+                    
             // deposit liquidity into tokenId
             if (state.maxAddAmount0 > 0 || state.maxAddAmount1 > 0) {
                 (, state.amountAdded0, state.amountAdded1) = nonfungiblePositionManager.increaseLiquidity(
@@ -647,18 +647,34 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 state.maxAddAmount0 = amount0 * EXP_64 / (EXP_64 + totalBonusX64);
                 state.maxAddAmount1 = amount1 * EXP_64 / (EXP_64 + totalBonusX64);
             } else {
-                state.maxAddAmount0 = amount0.sub(state.bonusAmount0);
-                state.maxAddAmount1 = amount1.sub(state.bonusAmount1);
+                state.maxAddAmount0 = amount0 > state.bonusAmount0 ? amount0.sub(state.bonusAmount0) : 0;
+                state.maxAddAmount1 = amount1 > state.bonusAmount1 ? amount1.sub(state.bonusAmount1) : 0;
             }
         }
 
         // if it didn't swap correctly (rounding to zero / <minSwapRatioX64) and should add on side
         // dont add anything - otherwise add liquidity crashes
-        if (state.maxAddAmount0 == 0 && state.positionAmount0 > 0) {
-            state.maxAddAmount1 = 0;
-        }
-        if (state.maxAddAmount1 == 0 && state.positionAmount1 > 0) {
+        if (state.positionAmount0 == 0) {
             state.maxAddAmount0 = 0;
+            if (state.maxAddAmount1 == 0 || state.maxAddAmount0 > 0) {
+                state.maxAddAmount0 = 0;
+            }
+        } else {
+            if (state.maxAddAmount0 <= 1) {
+                state.maxAddAmount0 = 0;
+                state.maxAddAmount1 = 0;
+            }
+        }
+        if (state.positionAmount1 == 0) {
+            state.maxAddAmount1 = 0;
+            if (state.maxAddAmount0 == 0 || state.maxAddAmount1 > 0) {
+                state.maxAddAmount1 = 0;
+            }
+        } else {
+            if (state.maxAddAmount1 <= 1) {
+                state.maxAddAmount0 = 0;
+                state.maxAddAmount1 = 0;
+            }
         }
 
         return (amount0, amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1);

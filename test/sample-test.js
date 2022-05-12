@@ -78,12 +78,17 @@ describe("AutoCompounder Tests", function () {
     await weth.connect(haydenSigner).approve(contract.address, amountETH)
     await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: mediumTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: 0});
 
-    // autocompound directly after mint
     expect(await contract.balanceOf(haydenAddress)).to.equal(3);
     
-    const tokenId = await contract.userTokens(haydenAddress, 2);
+    // autocompound directly after mint
+    let tokenId = await contract.userTokens(haydenAddress, 0);
     await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
 
+    tokenId = await contract.userTokens(haydenAddress, 1);
+    await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
+
+    tokenId = await contract.userTokens(haydenAddress, 2);
+    await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
   })
 
   it("Test one sided liquidity position with hayden position 1", async function () {
@@ -110,6 +115,14 @@ describe("AutoCompounder Tests", function () {
 
     // autompound to UNI fees - withdraw and add
     await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: true, deadline })
+
+    // try autocompounding several times to catch edge cases
+    await contract.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
+    await contract.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
+    await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, deadline })
+    await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, deadline })
+    await contract.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, deadline })
+    await contract.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, deadline })
 
     // add all collected liquidity - UNI only (from owner to hayden contract - for adding there is no owner check)
     const uni = await ethers.getContractAt("IERC20", uniAddress);
@@ -183,6 +196,7 @@ describe("AutoCompounder Tests", function () {
     expect(await contract.balanceOf(haydenAddress)).to.equal(0);
     expect(await contract.userTokenBalances(haydenAddress, usdcAddress)).to.equal(0);
     expect(await contract.userTokenBalances(haydenAddress, usdtAddress)).to.equal(0);
+
   });
 });
 
