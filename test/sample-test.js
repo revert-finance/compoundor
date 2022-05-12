@@ -157,7 +157,7 @@ describe("AutoCompounder Tests", function () {
     const gasCost = await contract.estimateGas.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
 
     const gasPrice = await ethers.provider.getGasPrice()
-    console.log("Execution cost:", ethers.utils.formatEther(gasPrice.mul(gasCost)))
+    const costETH = parseFloat(ethers.utils.formatEther(gasPrice.mul(gasCost)))
 
     // simulate cost vs gains
     const tokenPrice0X96 = await getTokenETHPriceX96(factory, position.token0);
@@ -165,8 +165,7 @@ describe("AutoCompounder Tests", function () {
 
     const gain0 = parseFloat(ethers.utils.formatEther(bonus0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))))
     const gain1 = parseFloat(ethers.utils.formatEther(bonus1.mul(tokenPrice1X96).div(BigNumber.from(2).pow(96))))
-
-    console.log("Execution gain:", gain0 + gain1)
+    const gainsETH = gain0 + gain1 
 
     // check bonus payouts
     const [bonus0a, bonus1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
