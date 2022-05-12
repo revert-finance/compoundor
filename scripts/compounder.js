@@ -39,7 +39,7 @@ async function trackPositions() {
     logs.sort((a, b) => a.blockNumber - b.blockNumber)
 
     for (const log of logs) {
-        if (log.event == "TokenDeposited") { // TODO check which event
+        if (log.event == "TokenDeposited") {
             await addTrackedPosition(log.args.tokenId)
         } else {
             await removeTrackedPosition(log.args.tokenId)
@@ -164,7 +164,6 @@ async function autoCompoundPositions() {
         
             const gains = gain0.add(gain1)
 
-            // TODO reasonable condition
             if (isReady(gains, cost)) {
                 const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
                 console.log("Autocompounded position", nftId, tx)
