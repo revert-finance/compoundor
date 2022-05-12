@@ -93,13 +93,13 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 amountAdded1;
         uint256 amount0Fees;
         uint256 amount1Fees;
+        uint256 priceX96;
         address tokenOwner;
         address token0;
         address token1;
         uint24 fee;
         int24 tickLower;
         int24 tickUpper;
-        uint256 priceX96;
     }
 
     /**
@@ -131,22 +131,25 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         // only if there are balances to work with - start autocompounding process
         if (state.amount0 > 0 || state.amount1 > 0) {
 
-            SwapParams memory swapParams = SwapParams(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.amount0, state.amount1, params.deadline, params.bonusConversion, state.tokenOwner == msg.sender);
+            SwapParams memory swapParams = SwapParams(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.amount0, state.amount1, params.deadline, params.bonusConversion, state.tokenOwner == msg.sender, false);
 
             // swap to position ratio (considering estimated fee)
             (state.amount0, state.amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1) = _swapToPriceRatio(swapParams);
 
             // deposit liquidity into tokenId
-            (, state.amountAdded0, state.amountAdded1) = nonfungiblePositionManager.increaseLiquidity(
-                INonfungiblePositionManager.IncreaseLiquidityParams(
-                    params.tokenId,
-                    state.maxAddAmount0,
-                    state.maxAddAmount1,
-                    0,
-                    0,
-                    params.deadline
-                )
-            );
+            if (state.maxAddAmount0 > 0 || state.maxAddAmount1 > 0) {
+                (, state.amountAdded0, state.amountAdded1) = nonfungiblePositionManager.increaseLiquidity(
+                    INonfungiblePositionManager.IncreaseLiquidityParams(
+                        params.tokenId,
+                        state.maxAddAmount0,
+                        state.maxAddAmount1,
+                        0,
+                        0,
+                        params.deadline
+                    )
+                );
+            }
+
 
             // fees are always calculated based on added amount
             // only calculate them when not tokenOwner
@@ -156,7 +159,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                     state.amount1Fees = state.amountAdded1 * totalBonusX64 / EXP_64;
                 } else {
                     // calculate total added - derive fees
-                    uint addedTotal0 = state.amountAdded0 + state.amountAdded1.mul(EXP_96).div(state.priceX96);
+                    uint addedTotal0 = state.amountAdded0.add(state.amountAdded1.mul(EXP_96).div(state.priceX96));
                     if (params.bonusConversion == BonusConversion.TOKEN_0) {
                         state.amount0Fees = addedTotal0.mul(totalBonusX64).div(EXP_64);
                         // if there is not enough token0 to pay fee - pay all there is
@@ -269,11 +272,10 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
         (state.addedAmount0, state.addedAmount1) = _prepareAdd(params.token0, params.token1, params.amount0, params.amount1);
 
-        SwapParams memory swapParams = SwapParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, state.addedAmount0, state.addedAmount1, params.deadline, BonusConversion.NONE, true);
+        SwapParams memory swapParams = SwapParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, state.addedAmount0, state.addedAmount1, params.deadline, BonusConversion.NONE, true, true);
         (state.swappedAmount0, state.swappedAmount1,,,) = _swapToPriceRatio(swapParams);
 
         INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, state.swappedAmount0, state.swappedAmount1, 0, 0, address(this), params.deadline);
-
         (tokenId, liquidity, amount0, amount1) = nonfungiblePositionManager.mint(mintParams);
 
         _addToken(tokenId, params.recipient, false);
@@ -319,7 +321,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
         (state.addedAmount0, state.addedAmount1) = _prepareAdd(state.token0, state.token1, params.amount0, params.amount1);
 
-        SwapParams memory swapParams = SwapParams(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.addedAmount0, state.addedAmount1, params.deadline, BonusConversion.NONE, true);
+        SwapParams memory swapParams = SwapParams(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.addedAmount0, state.addedAmount1, params.deadline, BonusConversion.NONE, true, true);
         (state.swappedAmount0, state.swappedAmount1,,,) = _swapToPriceRatio(swapParams);
 
         INonfungiblePositionManager.IncreaseLiquidityParams memory increaseLiquidityParams = INonfungiblePositionManager.IncreaseLiquidityParams(params.tokenId, state.swappedAmount0, state.swappedAmount1, 0, 0, params.deadline);
@@ -512,6 +514,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 bonusAmount1;
         uint256 positionAmount0;
         uint256 positionAmount1;
+        uint256 maxAddAmount0;
+        uint256 maxAddAmount1;
         int24 tick;
         int24 otherTick;
         uint256 priceX96;
@@ -537,6 +541,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 deadline;
         BonusConversion bc;
         bool isOwner;
+        bool ignoreSwapLimit;
     }
 
     function _swapToPriceRatio(SwapParams memory params) internal returns (uint256, uint256, uint256, uint256, uint256) {
@@ -560,8 +565,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         state.sqrtPriceX96Upper = TickMath.getSqrtRatioAtTick(params.tickUpper);
         (state.positionAmount0, state.positionAmount1) = LiquidityAmounts.getAmountsForLiquidity(state.sqrtPriceX96, state.sqrtPriceX96Lower, state.sqrtPriceX96Upper, EXP_96); // dummy value we just need ratio
 
-        state.priceX96 = (uint256(state.sqrtPriceX96) ** 2) / EXP_96;
-
+        state.priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(EXP_96);
         state.total0 = amount0.add(amount1.mul(EXP_96).div(state.priceX96));
 
         // calculate how much of the position needs to be converted to the other token
@@ -618,34 +622,46 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         }
 
         // only swap when swap big enough
-        if (state.delta0.mul(EXP_64).div(state.total0) >= minSwapRatioX64) {
+        if (state.delta0 > 0 && (state.delta0.mul(EXP_64).div(state.total0) >= minSwapRatioX64 || params.ignoreSwapLimit)) {
             if (state.sell0) {
                 uint256 amountOut = _swap(abi.encodePacked(params.token0, params.fee, params.token1), state.delta0, params.deadline);
                 amount0 = amount0.sub(state.delta0);
                 amount1 = amount1.add(amountOut);
             } else {
                 state.delta1 = state.delta0.mul(state.priceX96).div(EXP_96);
-                uint256 amountOut = _swap(abi.encodePacked(params.token1, params.fee, params.token0), state.delta1, params.deadline);
-                amount0 = amount0.add(amountOut);
-                amount1 = amount1.sub(state.delta1);
+                // prevent possible rounding to 0 issue
+                if (state.delta1 > 0) {
+                    uint256 amountOut = _swap(abi.encodePacked(params.token1, params.fee, params.token0), state.delta1, params.deadline);
+                    amount0 = amount0.add(amountOut);
+                    amount1 = amount1.sub(state.delta1);
+                }
             }
         }
 
-        // calculate max amount to add considering fees (if token owner is calling - no fees)
+        // calculate max amount to add - considering fees (if token owner is calling - no fees)
         if (params.isOwner) {
-            state.positionAmount0 = amount0;
-            state.positionAmount1 = amount1;
+            state.maxAddAmount0 = amount0;
+            state.maxAddAmount1 = amount1;
         } else {
             if (params.bc == BonusConversion.NONE) {
-                state.positionAmount0 = amount0 * EXP_64 / (EXP_64 + totalBonusX64);
-                state.positionAmount1 = amount1 * EXP_64 / (EXP_64 + totalBonusX64);
+                state.maxAddAmount0 = amount0 * EXP_64 / (EXP_64 + totalBonusX64);
+                state.maxAddAmount1 = amount1 * EXP_64 / (EXP_64 + totalBonusX64);
             } else {
-                state.positionAmount0 = amount0.sub(state.bonusAmount0);
-                state.positionAmount1 = amount1.sub(state.bonusAmount1);
+                state.maxAddAmount0 = amount0.sub(state.bonusAmount0);
+                state.maxAddAmount1 = amount1.sub(state.bonusAmount1);
             }
         }
 
-        return (amount0, amount1, state.priceX96, state.positionAmount0, state.positionAmount1);
+        // if it didn't swap correctly (rounding to zero / <minSwapRatioX64) and should add on side
+        // dont add anything - otherwise add liquidity crashes
+        if (state.maxAddAmount0 == 0 && state.positionAmount0 > 0) {
+            state.maxAddAmount1 = 0;
+        }
+        if (state.maxAddAmount1 == 0 && state.positionAmount1 > 0) {
+            state.maxAddAmount0 = 0;
+        }
+
+        return (amount0, amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1);
     }
 
     function _swap(bytes memory swapPath, uint256 amount, uint256 deadline) internal returns (uint256 amountOut) {
