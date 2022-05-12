@@ -46,12 +46,12 @@ async function trackPositions() {
         }
     }
 
+    // setup ws listeners
     wsProvider.on(depositedFilter, async (...args) => {
         const event = args[args.length - 1]
         const log = contract.interface.parseLog(event)
         await addTrackedPosition(log.args.tokenId)
     })
-
     wsProvider.on(withdrawnFilter, async (...args) => {
         const event = args[args.length - 1]
         const log = contract.interface.parseLog(event)
@@ -65,7 +65,7 @@ async function addTrackedPosition(nftId) {
 }
 
 async function removeTrackedPosition(nftId) {
-    delete trackedPositions[log.args.tokenId]
+    delete trackedPositions[nftId]
 }
 
 function updateTrackedPosition(nftId, gains, cost) {
@@ -85,6 +85,7 @@ async function getTokenETHPriceX96(address) {
         return BigNumber.from(2).pow(96);
     }
     
+    // TODO take average or highest liquidity
     for (let fee of [100, 500, 3000, 10000]) {
         const poolAddress = await factory.getPool(address, wethAddress, fee);
         if (poolAddress > 0) {
@@ -95,7 +96,7 @@ async function getTokenETHPriceX96(address) {
         }
     }
 
-    // TODO decide what to do here...
+    // TODO decide what to do here... should never happen
     throw Error("Couldn't find price for token", address)
 }
 
