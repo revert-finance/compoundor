@@ -651,9 +651,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         // dont add anything - otherwise add liquidity crashes
         if (state.positionAmount0 == 0) {
             maxAddAmount0 = 0;
-            if (maxAddAmount1 == 0 || maxAddAmount0 > 0) {
-                maxAddAmount0 = 0;
-            }
         } else {
             if (maxAddAmount0 <= 1) {
                 maxAddAmount0 = 0;
@@ -662,9 +659,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         }
         if (state.positionAmount1 == 0) {
             maxAddAmount1 = 0;
-            if (maxAddAmount0 == 0 || maxAddAmount1 > 0) {
-                maxAddAmount1 = 0;
-            }
         } else {
             if (maxAddAmount1 <= 1) {
                 maxAddAmount0 = 0;
