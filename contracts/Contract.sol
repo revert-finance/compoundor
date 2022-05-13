@@ -89,8 +89,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 amount1;
         uint256 maxAddAmount0;
         uint256 maxAddAmount1;
-        uint256 amountAdded0;
-        uint256 amountAdded1;
         uint256 amount0Fees;
         uint256 amount1Fees;
         uint256 priceX96;
@@ -108,7 +106,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
      * @return bonus0 Amount of token0 caller recieves
      * @return bonus1 Amount of token1 caller recieves
      */
-    function autoCompound(AutoCompoundParams calldata params) override external nonReentrant returns (uint256 bonus0, uint256 bonus1) {
+    function autoCompound(AutoCompoundParams calldata params) override external nonReentrant returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1) {
 
         require(ownerOf[params.tokenId] != address(0), "!found");
         require(params.deadline < block.timestamp + MAX_DEADLINE_IN_FUTURE, "deadline>allowed");
@@ -138,7 +136,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                     
             // deposit liquidity into tokenId
             if (state.maxAddAmount0 > 0 || state.maxAddAmount1 > 0) {
-                (, state.amountAdded0, state.amountAdded1) = nonfungiblePositionManager.increaseLiquidity(
+                (, compounded0, compounded1) = nonfungiblePositionManager.increaseLiquidity(
                     INonfungiblePositionManager.IncreaseLiquidityParams(
                         params.tokenId,
                         state.maxAddAmount0,
@@ -155,30 +153,30 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             // only calculate them when not tokenOwner
             if (state.tokenOwner != msg.sender) {
                 if (params.bonusConversion == BonusConversion.NONE) {
-                    state.amount0Fees = state.amountAdded0.mul(totalBonusX64).div(EXP_64);
-                    state.amount1Fees = state.amountAdded1.mul(totalBonusX64).div(EXP_64);
+                    state.amount0Fees = compounded0.mul(totalBonusX64).div(EXP_64);
+                    state.amount1Fees = compounded1.mul(totalBonusX64).div(EXP_64);
                 } else {
                     // calculate total added - derive fees
-                    uint addedTotal0 = state.amountAdded0.add(state.amountAdded1.mul(EXP_96).div(state.priceX96));
+                    uint addedTotal0 = compounded0.add(compounded1.mul(EXP_96).div(state.priceX96));
                     if (params.bonusConversion == BonusConversion.TOKEN_0) {
                         state.amount0Fees = addedTotal0.mul(totalBonusX64).div(EXP_64);
                         // if there is not enough token0 to pay fee - pay all there is
-                        if (state.amount0Fees > state.amount0.sub(state.amountAdded0)) {
-                            state.amount0Fees = state.amount0.sub(state.amountAdded0);
+                        if (state.amount0Fees > state.amount0.sub(compounded0)) {
+                            state.amount0Fees = state.amount0.sub(compounded0);
                         }
                     } else {
                         state.amount1Fees = addedTotal0.mul(state.priceX96).div(EXP_96).mul(totalBonusX64).div(EXP_64);
                         // if there is not enough token1 to pay fee - pay all there is
-                        if (state.amount1Fees > state.amount1.sub(state.amountAdded1)) {
-                            state.amount1Fees = state.amount1.sub(state.amountAdded1);
+                        if (state.amount1Fees > state.amount1.sub(compounded1)) {
+                            state.amount1Fees = state.amount1.sub(compounded1);
                         }
                     }
                 }
             }
 
             // calculate remaining tokens for owner
-            userTokenBalances[state.tokenOwner][state.token0] = state.amount0.sub(state.amountAdded0).sub(state.amount0Fees);
-            userTokenBalances[state.tokenOwner][state.token1] = state.amount1.sub(state.amountAdded1).sub(state.amount1Fees);
+            userTokenBalances[state.tokenOwner][state.token0] = state.amount0.sub(compounded0).sub(state.amount0Fees);
+            userTokenBalances[state.tokenOwner][state.token1] = state.amount1.sub(compounded1).sub(state.amount1Fees);
 
             // distribute fees -  handle 3 cases (contract owner / nft owner / oneone else)
             if (owner() == msg.sender) {
@@ -191,8 +189,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 bonus0 = 0;
                 bonus1 = 0;
             } else {
-                uint256 compounderFees0 = state.amount0Fees.mul(compounderBonusX64).div(EXP_64);
-                uint256 compounderFees1 = state.amount1Fees.mul(compounderBonusX64).div(EXP_64);
+                uint256 compounderFees0 = state.amount0Fees.mul(compounderBonusX64).div(totalBonusX64);
+                uint256 compounderFees1 = state.amount1Fees.mul(compounderBonusX64).div(totalBonusX64);
 
                 userTokenBalances[msg.sender][state.token0] = userTokenBalances[msg.sender][state.token0].add(compounderFees0);
                 userTokenBalances[msg.sender][state.token1] = userTokenBalances[msg.sender][state.token1].add(compounderFees1);
@@ -208,7 +206,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             _withdrawFullBalances(state.token0, state.token1, msg.sender);
         }
 
-        emit AutoCompounded(msg.sender, params.tokenId, state.amountAdded0, state.amountAdded1, bonus0, bonus1);
+        emit AutoCompounded(msg.sender, params.tokenId, compounded0, compounded1, bonus0, bonus1);
     }
 
     /**

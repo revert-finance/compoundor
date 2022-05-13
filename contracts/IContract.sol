@@ -93,7 +93,7 @@ interface IContract is IERC721Receiver {
      * @return bonus0 Amount of token0 caller recieves
      * @return bonus1 Amount of token1 caller recieves
      */
-    function autoCompound(AutoCompoundParams calldata params) external returns (uint256 bonus0, uint256 bonus1);
+    function autoCompound(AutoCompoundParams calldata params) external returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1);
 
     /// @notice params for swapAndMint()
     struct SwapAndMintParams {
