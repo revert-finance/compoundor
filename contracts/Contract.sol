@@ -155,8 +155,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             // only calculate them when not tokenOwner
             if (state.tokenOwner != msg.sender) {
                 if (params.bonusConversion == BonusConversion.NONE) {
-                    state.amount0Fees = state.amountAdded0 * totalBonusX64 / EXP_64;
-                    state.amount1Fees = state.amountAdded1 * totalBonusX64 / EXP_64;
+                    state.amount0Fees = state.amountAdded0.mul(totalBonusX64).div(EXP_64);
+                    state.amount1Fees = state.amountAdded1.mul(totalBonusX64).div(EXP_64);
                 } else {
                     // calculate total added - derive fees
                     uint addedTotal0 = state.amountAdded0.add(state.amountAdded1.mul(EXP_96).div(state.priceX96));
@@ -191,8 +191,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 bonus0 = 0;
                 bonus1 = 0;
             } else {
-                uint256 compounderFees0 = state.amount0Fees * compounderBonusX64 / EXP_64;
-                uint256 compounderFees1 = state.amount1Fees * compounderBonusX64 / EXP_64;
+                uint256 compounderFees0 = state.amount0Fees.mul(compounderBonusX64).div(EXP_64);
+                uint256 compounderFees1 = state.amount1Fees.mul(compounderBonusX64).div(EXP_64);
 
                 userTokenBalances[msg.sender][state.token0] = userTokenBalances[msg.sender][state.token0].add(compounderFees0);
                 userTokenBalances[msg.sender][state.token1] = userTokenBalances[msg.sender][state.token1].add(compounderFees1);
@@ -589,9 +589,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 state.bonusAmount0 = state.totalBonus0;
                 if (state.sell0) {
                     if (state.delta0 >= state.totalBonus0) {
-                        state.delta0 -= state.totalBonus0;
+                        state.delta0 = state.delta0.sub(state.totalBonus0);
                     } else {
-                        state.delta0 = state.totalBonus0 - state.delta0;
+                        state.delta0 = state.totalBonus0.sub(state.delta0);
                         state.sell0 = false;
                     }
                 } else {
@@ -601,12 +601,12 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                     }
                 }
             } else if (params.bc == BonusConversion.TOKEN_1) {
-                state.bonusAmount1 = state.totalBonus0 * priceX96 / EXP_96;
+                state.bonusAmount1 = state.totalBonus0.mul(priceX96).div(EXP_96);
                 if (!state.sell0) {
                     if (state.delta0 >= state.totalBonus0) {
-                        state.delta0 -= state.totalBonus0;
+                        state.delta0 = state.delta0.sub(state.totalBonus0);
                     } else {
-                        state.delta0 = state.totalBonus0 - state.delta0;
+                        state.delta0 = state.totalBonus0.sub(state.delta0);
                         state.sell0 = true;
                     }
                 } else {
@@ -641,8 +641,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             maxAddAmount1 = amount1;
         } else {
             if (params.bc == BonusConversion.NONE) {
-                maxAddAmount0 = amount0 * EXP_64 / (EXP_64 + totalBonusX64);
-                maxAddAmount1 = amount1 * EXP_64 / (EXP_64 + totalBonusX64);
+                maxAddAmount0 = amount0.mul(EXP_64).div(uint(totalBonusX64).add(EXP_64));
+                maxAddAmount1 = amount1.mul(EXP_64).div(uint(totalBonusX64).add(EXP_64));
             } else {
                 maxAddAmount0 = amount0 > state.bonusAmount0 ? amount0.sub(state.bonusAmount0) : 0;
                 maxAddAmount1 = amount1 > state.bonusAmount1 ? amount1.sub(state.bonusAmount1) : 0;
