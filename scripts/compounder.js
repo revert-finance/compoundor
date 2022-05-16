@@ -61,7 +61,7 @@ async function trackPositions() {
 
 async function addTrackedPosition(nftId) {
     const position = await npm.positions(nftId)
-    trackedPositions[nftId] = { nftId, token0: position.token0, token1: position.token1 }
+    trackedPositions[nftId] = { nftId, token0: position.token0, token1: position.token1, fee: position.fee }
 }
 
 async function removeTrackedPosition(nftId) {
@@ -79,8 +79,30 @@ function updateTrackedPosition(nftId, gains, cost) {
     trackedPositions[nftId].lastCost = cost
 }
 
+async function getTokenETHPricesX96(position, cache) {
+
+    const tokenPrice0X96 = cache[position.token0] || await getTokenETHPriceX96(position.token0)
+    const tokenPrice1X96 = cache[position.token1] || await getTokenETHPriceX96(position.token1)
+
+    cache[position.token0] = tokenPrice0X96
+    cache[position.token1] = tokenPrice1X96
+
+    if (tokenPrice0X96 && tokenPrice1X96) {
+        return [tokenPrice0X96, tokenPrice1X96]
+    } else if (tokenPrice0X96 || tokenPrice1X96) {
+        // if only one has ETH pair - calculate other with pool price
+        const poolAddress = await factory.getPool(position.token0, position.token1, position.fee);
+        const poolContract = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
+        const slot0 = await poolContract.slot0()
+        const priceX96 = slot0.sqrtPriceX96.pow(2).div(BigNumber.from(2).pow(192 - 96))
+        return [tokenPrice0X96 || tokenPrice1X96.mul(priceX96).div(BigNumber.from(2).pow(96)), tokenPrice1X96 || tokenPrice0X96.mul(BigNumber.from(2).pow(96)).div(priceX96)]
+    } else {
+        // TODO decide what to do here... should never happen
+        throw Error("Couldn't find prices for position", position.token0, position.token1, position.fee)
+    }
+}
+
 async function getTokenETHPriceX96(address) {
-    
     if (address == wethAddress) {
         return BigNumber.from(2).pow(96);
     }
@@ -96,8 +118,7 @@ async function getTokenETHPriceX96(address) {
         }
     }
 
-    // TODO decide what to do here... should never happen
-    throw Error("Couldn't find price for token", address)
+    return null
 }
 
 function isReady(gains, cost) {
@@ -154,11 +175,7 @@ async function autoCompoundPositions() {
 
             const cost = gasPrice.mul(gasCost)
 
-            const tokenPrice0X96 = tokenPriceCache[trackedPosition.token0] || await getTokenETHPriceX96(trackedPosition.token0)
-            tokenPriceCache[trackedPosition.token0] = tokenPrice0X96
-
-            const tokenPrice1X96 = tokenPriceCache[trackedPosition.token1] || await getTokenETHPriceX96(trackedPosition.token1)
-            tokenPriceCache[trackedPosition.token1] = tokenPrice1X96
+            const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
             const gain0 = bonus0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))
             const gain1 = bonus1.mul(tokenPrice1X96).div(BigNumber.from(2).pow(96))
