@@ -116,14 +116,6 @@ describe("AutoCompounder Tests", function () {
     // autompound to UNI fees - withdraw and add
     await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: true, deadline })
 
-    // try autocompounding several times to catch edge cases
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, deadline })
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, deadline })
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, deadline })
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, deadline })
-
     // add all collected liquidity - UNI only (from owner to hayden contract - for adding there is no owner check)
     const uni = await ethers.getContractAt("IERC20", uniAddress);
     await uni.approve(contract.address, bonus0b);
