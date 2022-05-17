@@ -27,15 +27,15 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     uint128 constant EXP_96 = 2**96;
 
     // max bonus
-    uint64 constant public MAX_BONUS_X64 = uint64(EXP_64 / 20); // 5%
+    uint64 constant public MAX_BONUS_X64 = uint64(EXP_64 / 50); // 2%
 
     // max positions
     uint32 constant public MAX_POSITIONS_PER_ADDRESS = 100;
     uint32 constant public MAX_DEADLINE_IN_FUTURE = 500;
 
     // changable config values
-    uint64 public totalBonusX64 = MAX_BONUS_X64; // 5%
-    uint64 public compounderBonusX64 = MAX_BONUS_X64 / 5; // 1%
+    uint64 public totalBonusX64 = MAX_BONUS_X64; // 2%
+    uint64 public compounderBonusX64 = MAX_BONUS_X64 / 2; // 1%
     uint64 public minSwapRatioX64 = uint64(EXP_64 / 40); // 2.5%
     uint32 public maxTWAPTickDifference = 100; // 1%
 
