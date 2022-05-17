@@ -105,6 +105,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
      * @param params Autocompound specific parameters (tokenId, ...)
      * @return bonus0 Amount of token0 caller recieves
      * @return bonus1 Amount of token1 caller recieves
+     * @return compounded0 Amount of token0 that was compounded
+     * @return compounded1 Amount of token1 that was compounded
      */
     function autoCompound(AutoCompoundParams calldata params) override external nonReentrant returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1) {
 
@@ -334,14 +336,14 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     /**
      * @notice Special method to decrease liquidity and collect decreased amount - can only be called by owner
      * @dev Needs to do collect at the same time, otherwise the available amount would be autocompoundable
-     * @param params INonfungiblePositionManager.DecreaseLiquidityParams which are forwarded to the Uniswap V3 NonfungiblePositionManager
+     * @param params DecreaseLiquidityAndCollectParams which are forwarded to the Uniswap V3 NonfungiblePositionManager
      * @return amount0 amount of token0 removed and collected
      * @return amount1 amount of token1 removed and collected
      */
-    function decreaseLiquidityAndCollect(INonfungiblePositionManager.DecreaseLiquidityParams calldata params, address recipient) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
+    function decreaseLiquidityAndCollect(DecreaseLiquidityAndCollectParams calldata params) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
         require(ownerOf[params.tokenId] == msg.sender, "!owner");
-        (amount0, amount1) = nonfungiblePositionManager.decreaseLiquidity(params);
-        INonfungiblePositionManager.CollectParams memory collectParams = INonfungiblePositionManager.CollectParams(params.tokenId, recipient, LiquidityAmounts.toUint128(amount0), LiquidityAmounts.toUint128(amount1));
+        (amount0, amount1) = nonfungiblePositionManager.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams(params.tokenId, params.liquidity, params.amount0Min, params.amount1Min, params.deadline));
+        INonfungiblePositionManager.CollectParams memory collectParams = INonfungiblePositionManager.CollectParams(params.tokenId, params.recipient, LiquidityAmounts.toUint128(amount0), LiquidityAmounts.toUint128(amount1));
         nonfungiblePositionManager.collect(collectParams);
     }
 
