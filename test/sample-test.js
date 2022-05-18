@@ -81,13 +81,13 @@ describe("AutoCompounder Tests", function () {
     expect(await contract.balanceOf(haydenAddress)).to.equal(3);
     
     // autocompound directly after mint
-    let tokenId = await contract.userTokens(haydenAddress, 0);
+    let tokenId = await contract.accountTokens(haydenAddress, 0);
     await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
 
-    tokenId = await contract.userTokens(haydenAddress, 1);
+    tokenId = await contract.accountTokens(haydenAddress, 1);
     await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
 
-    tokenId = await contract.userTokens(haydenAddress, 2);
+    tokenId = await contract.accountTokens(haydenAddress, 2);
     await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
   })
 
@@ -177,8 +177,8 @@ describe("AutoCompounder Tests", function () {
     await contract.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
 
     // get leftover
-    const bh0 = await contract.userBalances(haydenAddress, usdcAddress);
-    const bh1 = await contract.userBalances(haydenAddress, usdtAddress);
+    const bh0 = await contract.accountBalances(haydenAddress, usdcAddress);
+    const bh1 = await contract.accountBalances(haydenAddress, usdtAddress);
 
     // calculate sum of bonus / leftovers / compounded amount in ETH
     const valueETHAfter = bonus0a.add(comp0a).add(bh0).mul(tokenPrice0X96).div(BigNumber.from(2).pow(96)).add(bonus1a.add(comp1a).add(bh1).mul(tokenPrice1X96).div(BigNumber.from(2).pow(96)))
@@ -189,8 +189,8 @@ describe("AutoCompounder Tests", function () {
     // withdraw bonus 1 by 1
     await contract.withdrawBalance(position.token0, owner.address, bonus0)
     await contract.withdrawBalance(position.token1, owner.address, bonus1)
-    expect(await contract.userBalances(owner.address, usdcAddress)).to.equal(0);
-    expect(await contract.userBalances(owner.address, usdtAddress)).to.equal(0);
+    expect(await contract.accountBalances(owner.address, usdcAddress)).to.equal(0);
+    expect(await contract.accountBalances(owner.address, usdtAddress)).to.equal(0);
 
     expect(await usdc.balanceOf(owner.address)).to.gt(0)
     expect(await usdt.balanceOf(owner.address)).to.gt(0)
@@ -198,8 +198,8 @@ describe("AutoCompounder Tests", function () {
     // remove token - and remaining balances
     await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, 0, true);
     expect(await contract.balanceOf(haydenAddress)).to.equal(0);
-    expect(await contract.userBalances(haydenAddress, usdcAddress)).to.equal(0);
-    expect(await contract.userBalances(haydenAddress, usdtAddress)).to.equal(0);
+    expect(await contract.accountBalances(haydenAddress, usdcAddress)).to.equal(0);
+    expect(await contract.accountBalances(haydenAddress, usdtAddress)).to.equal(0);
 
   });
 });

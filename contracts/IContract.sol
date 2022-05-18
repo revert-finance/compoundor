@@ -61,7 +61,7 @@ interface IContract is IERC721Receiver {
      * @param token Address of token
      * @return balance amount of token for account
      */
-    function userBalances(address account, address token) external view returns (uint256 balance);
+    function accountBalances(address account, address token) external view returns (uint256 balance);
 
     /**
      * @notice Removes a NFT from the protocol and safe transfers it to address to
