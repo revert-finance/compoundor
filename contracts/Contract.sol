@@ -36,7 +36,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     // changable config values
     uint64 public totalBonusX64 = MAX_BONUS_X64; // 2%
     uint64 public compounderBonusX64 = MAX_BONUS_X64 / 2; // 1%
-    uint64 public minSwapRatioX64 = uint64(EXP_64 / 40); // 2.5%
     uint32 public maxTWAPTickDifference = 100; // 1%
 
     // wrapped native token address
@@ -131,7 +130,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         // only if there are balances to work with - start autocompounding process
         if (state.amount0 > 0 || state.amount1 > 0) {
 
-            SwapParams memory swapParams = SwapParams(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.amount0, state.amount1, params.deadline, params.bonusConversion, state.tokenOwner == msg.sender, false);
+            SwapParams memory swapParams = SwapParams(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.amount0, state.amount1, params.deadline, params.bonusConversion, state.tokenOwner == msg.sender, params.doSwap);
     
             // swap to position ratio (considering estimated fee)
             (state.amount0, state.amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1) = _swapToPriceRatio(swapParams);
@@ -149,7 +148,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                     )
                 );
             }
-
 
             // fees are always calculated based on added amount
             // only calculate them when not tokenOwner
@@ -222,15 +220,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         totalBonusX64 = _totalBonusX64;
         compounderBonusX64 = _compounderBonusX64;
         emit BonusUpdated(msg.sender, _totalBonusX64, _compounderBonusX64);
-    }
-
-    /**
-     * @notice Management method to change the min ratio to decide when a swap is executed (onlyOwner)
-     * @param _minSwapRatioX64 new min swap ratio
-     */
-    function setMinSwapRatio(uint64 _minSwapRatioX64) external onlyOwner {
-        minSwapRatioX64 = _minSwapRatioX64;
-        emit MinSwapRatioUpdated(msg.sender, _minSwapRatioX64);
     }
 
     /**
@@ -538,7 +527,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 deadline;
         BonusConversion bc;
         bool isOwner;
-        bool ignoreSwapLimit;
+        bool doSwap;
     }
 
     function _swapToPriceRatio(SwapParams memory params) internal returns (uint256 amount0, uint256 amount1, uint256 priceX96, uint256 maxAddAmount0, uint256 maxAddAmount1) {
@@ -557,84 +546,96 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         state.otherTick = _getTWAPTick(pool);
         _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
 
+        priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(EXP_96);
+        state.total0 = amount0.add(amount1.mul(EXP_96).div(priceX96));
+        state.totalBonus0 = state.total0.mul(totalBonusX64).div(EXP_64);
+
         // calculate ideal position amounts
         state.sqrtPriceX96Lower = TickMath.getSqrtRatioAtTick(params.tickLower);
         state.sqrtPriceX96Upper = TickMath.getSqrtRatioAtTick(params.tickUpper);
         (state.positionAmount0, state.positionAmount1) = LiquidityAmounts.getAmountsForLiquidity(state.sqrtPriceX96, state.sqrtPriceX96Lower, state.sqrtPriceX96Upper, EXP_96); // dummy value we just need ratio
 
-        priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(EXP_96);
-        state.total0 = amount0.add(amount1.mul(EXP_96).div(priceX96));
+        // swap to correct proportions is requested
+        if (params.doSwap) {
 
-        // calculate how much of the position needs to be converted to the other token
-        if (state.positionAmount0 == 0) {
-            state.delta0 = amount0;
-            state.sell0 = true;
-        } else if (state.positionAmount1 == 0) {
-            state.delta0 = amount1.mul(EXP_96).div(priceX96);
-            state.sell0 = false;
-        } else {
-            state.amountRatioX96 = state.positionAmount0.mul(EXP_96).div(state.positionAmount1);
-            state.sell0 = (state.amountRatioX96.mul(amount1) < amount0.mul(EXP_96));
-            if (state.sell0) {
-                state.delta0 = amount0.mul(EXP_96).sub(state.amountRatioX96.mul(amount1)).div(state.amountRatioX96.mul(priceX96).div(EXP_96).add(EXP_96));
+            // calculate how much of the position needs to be converted to the other token
+            if (state.positionAmount0 == 0) {
+                state.delta0 = amount0;
+                state.sell0 = true;
+            } else if (state.positionAmount1 == 0) {
+                state.delta0 = amount1.mul(EXP_96).div(priceX96);
+                state.sell0 = false;
             } else {
-                state.delta0 = state.amountRatioX96.mul(amount1).sub(amount0.mul(EXP_96)).div(state.amountRatioX96.mul(priceX96).div(EXP_96).add(EXP_96));
-            }
-        }
-
-        // adjust delta considering bonus payment mode
-        if (!params.isOwner) {
-            state.totalBonus0 = state.total0.mul(totalBonusX64).div(EXP_64);
-            if (params.bc == BonusConversion.TOKEN_0) {
-                state.bonusAmount0 = state.totalBonus0;
+                state.amountRatioX96 = state.positionAmount0.mul(EXP_96).div(state.positionAmount1);
+                state.sell0 = (state.amountRatioX96.mul(amount1) < amount0.mul(EXP_96));
                 if (state.sell0) {
-                    if (state.delta0 >= state.totalBonus0) {
-                        state.delta0 = state.delta0.sub(state.totalBonus0);
-                    } else {
-                        state.delta0 = state.totalBonus0.sub(state.delta0);
-                        state.sell0 = false;
-                    }
+                    state.delta0 = amount0.mul(EXP_96).sub(state.amountRatioX96.mul(amount1)).div(state.amountRatioX96.mul(priceX96).div(EXP_96).add(EXP_96));
                 } else {
-                    state.delta0 = state.delta0.add(state.totalBonus0);
-                    if (state.delta0 > amount1.mul(EXP_96).div(priceX96)) {
-                        state.delta0 = amount1.mul(EXP_96).div(priceX96);
-                    }
+                    state.delta0 = state.amountRatioX96.mul(amount1).sub(amount0.mul(EXP_96)).div(state.amountRatioX96.mul(priceX96).div(EXP_96).add(EXP_96));
                 }
-            } else if (params.bc == BonusConversion.TOKEN_1) {
-                state.bonusAmount1 = state.totalBonus0.mul(priceX96).div(EXP_96);
-                if (!state.sell0) {
-                    if (state.delta0 >= state.totalBonus0) {
-                        state.delta0 = state.delta0.sub(state.totalBonus0);
+            }
+
+            // adjust delta considering bonus payment mode
+            if (!params.isOwner) {
+                if (params.bc == BonusConversion.TOKEN_0) {
+                    state.bonusAmount0 = state.totalBonus0;
+                    if (state.sell0) {
+                        if (state.delta0 >= state.totalBonus0) {
+                            state.delta0 = state.delta0.sub(state.totalBonus0);
+                        } else {
+                            state.delta0 = state.totalBonus0.sub(state.delta0);
+                            state.sell0 = false;
+                        }
                     } else {
-                        state.delta0 = state.totalBonus0.sub(state.delta0);
-                        state.sell0 = true;
+                        state.delta0 = state.delta0.add(state.totalBonus0);
+                        if (state.delta0 > amount1.mul(EXP_96).div(priceX96)) {
+                            state.delta0 = amount1.mul(EXP_96).div(priceX96);
+                        }
                     }
-                } else {
-                    state.delta0 = state.delta0.add(state.totalBonus0);
-                    if (state.delta0 > amount0) {
-                        state.delta0 = amount0;
+                } else if (params.bc == BonusConversion.TOKEN_1) {
+                    state.bonusAmount1 = state.totalBonus0.mul(priceX96).div(EXP_96);
+                    if (!state.sell0) {
+                        if (state.delta0 >= state.totalBonus0) {
+                            state.delta0 = state.delta0.sub(state.totalBonus0);
+                        } else {
+                            state.delta0 = state.totalBonus0.sub(state.delta0);
+                            state.sell0 = true;
+                        }
+                    } else {
+                        state.delta0 = state.delta0.add(state.totalBonus0);
+                        if (state.delta0 > amount0) {
+                            state.delta0 = amount0;
+                        }
                     }
                 }
             }
-        }
 
-        // only swap when swap big enough
-        if (state.delta0 > 0 && (state.delta0.mul(EXP_64).div(state.total0) >= minSwapRatioX64 || params.ignoreSwapLimit)) {
-            if (state.sell0) {
-                uint256 amountOut = _swap(abi.encodePacked(params.token0, params.fee, params.token1), state.delta0, params.deadline);
-                amount0 = amount0.sub(state.delta0);
-                amount1 = amount1.add(amountOut);
-            } else {
-                state.delta1 = state.delta0.mul(priceX96).div(EXP_96);
-                // prevent possible rounding to 0 issue
-                if (state.delta1 > 0) {
-                    uint256 amountOut = _swap(abi.encodePacked(params.token1, params.fee, params.token0), state.delta1, params.deadline);
-                    amount0 = amount0.add(amountOut);
-                    amount1 = amount1.sub(state.delta1);
+            // only swap when swap big enough
+            if (state.delta0 > 0) {
+                if (state.sell0) {
+                    uint256 amountOut = _swap(abi.encodePacked(params.token0, params.fee, params.token1), state.delta0, params.deadline);
+                    amount0 = amount0.sub(state.delta0);
+                    amount1 = amount1.add(amountOut);
+                } else {
+                    state.delta1 = state.delta0.mul(priceX96).div(EXP_96);
+                    // prevent possible rounding to 0 issue
+                    if (state.delta1 > 0) {
+                        uint256 amountOut = _swap(abi.encodePacked(params.token1, params.fee, params.token0), state.delta1, params.deadline);
+                        amount0 = amount0.add(amountOut);
+                        amount1 = amount1.sub(state.delta1);
+                    }
+                }
+            }
+        } else {
+            if (!params.isOwner) {
+                if (params.bc == BonusConversion.TOKEN_0) {
+                    state.bonusAmount0 = state.totalBonus0;
+                } else if (params.bc == BonusConversion.TOKEN_1) {
+                    state.bonusAmount1 = state.totalBonus0.mul(priceX96).div(EXP_96);
                 }
             }
         }
-
+        
         // calculate max amount to add - considering fees (if token owner is calling - no fees)
         if (params.isOwner) {
             maxAddAmount0 = amount0;
@@ -649,23 +650,13 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             }
         }
 
-        // if it didn't swap correctly (rounding to zero / <minSwapRatioX64) and should add on side
+        // if it didn't swap or rounding to zero / <minSwapRatioX64 and should add on side
         // dont add anything - otherwise add liquidity crashes
         if (state.positionAmount0 == 0) {
             maxAddAmount0 = 0;
-        } else {
-            if (maxAddAmount0 <= 1) {
-                maxAddAmount0 = 0;
-                maxAddAmount1 = 0;
-            }
         }
         if (state.positionAmount1 == 0) {
             maxAddAmount1 = 0;
-        } else {
-            if (maxAddAmount1 <= 1) {
-                maxAddAmount0 = 0;
-                maxAddAmount1 = 0;
-            }
         }
     }
 

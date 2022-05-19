@@ -13,7 +13,6 @@ interface IContract is IERC721Receiver {
    
     // config changes
     event BonusUpdated(address account, uint64 totalBonusX64, uint64 compounderBonusX64);
-    event MinSwapRatioUpdated(address account, uint64 minSwapRatioX64);
     event MaxTWAPTickDifferenceUpdated(address account, uint32 maxTWAPTickDifference);
 
     // token movements
@@ -98,6 +97,9 @@ interface IContract is IERC721Receiver {
 
         // should token be withdrawn to compounder immediately
         bool withdrawBonus;
+
+        // do swap - to add max amount to position (costs more gas)
+        bool doSwap;
 
         // for swap / add liquidity operations
         uint256 deadline;
