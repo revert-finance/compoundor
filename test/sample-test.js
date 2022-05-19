@@ -79,16 +79,6 @@ describe("AutoCompounder Tests", function () {
     await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: mediumTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: 0});
 
     expect(await contract.balanceOf(haydenAddress)).to.equal(3);
-    
-    // autocompound directly after mint
-    let tokenId = await contract.accountTokens(haydenAddress, 0);
-    await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
-
-    tokenId = await contract.accountTokens(haydenAddress, 1);
-    await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
-
-    tokenId = await contract.accountTokens(haydenAddress, 2);
-    await contract.autoCompound({ tokenId: tokenId, bonusConversion: 0, withdrawBonus: false, deadline })
   })
 
   it("Test one sided liquidity position with hayden position 1", async function () {
@@ -103,18 +93,18 @@ describe("AutoCompounder Tests", function () {
     await contract.connect(haydenSigner).swapAndIncreaseLiquidity({ tokenId: nftId, amount0: "0", amount1: "1000000000", deadline}, {value: "1000000000"});
 
     // check bonus payouts
-    const [bonus0a, bonus1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
+    const [bonus0a, bonus1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline })
     expect(bonus0a).to.gt(0)
     expect(bonus1a).to.eq(0)
-    const [bonus0b, bonus1b] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, deadline })
+    const [bonus0b, bonus1b] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, doSwap: true, deadline })
     expect(bonus0b).to.gt(0)
     expect(bonus1b).to.eq(0)
-    const [bonus0c, bonus1c] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, deadline })
+    const [bonus0c, bonus1c] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, doSwap: true, deadline })
     expect(bonus0c).to.eq(0)
     expect(bonus1c).to.gt(0)
 
     // autompound to UNI fees - withdraw and add
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: true, deadline })
+    await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: true, doSwap: true, deadline })
 
     // add all collected liquidity - UNI only (from owner to hayden contract - for adding there is no owner check)
     const uni = await ethers.getContractAt("IERC20", uniAddress);
@@ -148,9 +138,9 @@ describe("AutoCompounder Tests", function () {
 
     // check autocompound result
     const position = await nonfungiblePositionManager.positions(nftId);
-    const [bonus0, bonus1] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
+    const [bonus0, bonus1] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: false, deadline })
 
-    const gasCost = await contract.estimateGas.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
+    const gasCost = await contract.estimateGas.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: false, deadline })
 
     const gasPrice = await ethers.provider.getGasPrice()
     const costETH = parseFloat(ethers.utils.formatEther(gasPrice.mul(gasCost)))
@@ -163,18 +153,18 @@ describe("AutoCompounder Tests", function () {
     const valueETHBefore = a0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96)).add(a1.mul(tokenPrice1X96).div(BigNumber.from(2).pow(96)))
 
     // check bonus payouts (from owner contract)
-    const [bonus0a, bonus1a, comp0a, comp1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
+    const [bonus0a, bonus1a, comp0a, comp1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: false, deadline })
     expect(bonus0a).to.gt(0)
     expect(bonus1a).to.gt(0)
-    const [bonus0b, bonus1b, comp0b, comp1b] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, deadline })
+    const [bonus0b, bonus1b, comp0b, comp1b] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, doSwap: false, deadline })
     expect(bonus0b).to.gt(0)
     expect(bonus1b).to.eq(0)
-    const [bonus0c, bonus1c, comp0c, comp1c] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, deadline })
+    const [bonus0c, bonus1c, comp0c, comp1c] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, doSwap: false, deadline })
     expect(bonus0c).to.eq(0)
     expect(bonus1c).to.gt(0)
 
     // execute autocompound (from owner contract)
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
+    await contract.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: false, deadline })
 
     // get leftover
     const bh0 = await contract.accountBalances(haydenAddress, usdcAddress);
