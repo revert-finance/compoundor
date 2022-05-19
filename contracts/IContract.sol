@@ -162,8 +162,8 @@ interface IContract is IERC721Receiver {
     }
 
     /**
-     * @notice Special method to decrease liquidity and collect decreased amount - can only be called by owner
-     * @dev Needs to do collect at the same time, otherwise the available amount would be autocompoundable
+     * @notice Special method to decrease liquidity and collect decreased amount - can only be called by the NFT owner
+     * @dev Needs to do collect at the same time, otherwise the available amount would be autocompoundable for other positions
      * @param params DecreaseLiquidityAndCollectParams which are forwarded to the Uniswap V3 NonfungiblePositionManager
      * @return amount0 amount of token0 removed and collected
      * @return amount1 amount of token1 removed and collected
@@ -174,7 +174,7 @@ interface IContract is IERC721Receiver {
         returns (uint256 amount0, uint256 amount1);
 
     /**
-     * @notice Forwards collect call to NonfungiblePositionManager - can only be called by owner
+     * @notice Forwards collect call to NonfungiblePositionManager - can only be called by the NFT owner
      * @param params INonfungiblePositionManager.CollectParams which are forwarded to the Uniswap V3 NonfungiblePositionManager
      * @return amount0 amount of token0 collected
      * @return amount1 amount of token1 collected
