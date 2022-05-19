@@ -218,12 +218,12 @@ describe("AutoCompounder Tests", function () {
     await contract.connect(compoundor).autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, deadline })
 
     // get amounts leftover in buffer
-    const buffer0 = await contract.userTokenBalances(nftOwnerAddress, token0.address);
-    const buffer1 = await contract.userTokenBalances(nftOwnerAddress, token1.address);
+    const buffer0 = await contract.accountBalances(nftOwnerAddress, token0.address);
+    const buffer1 = await contract.accountBalances(nftOwnerAddress, token1.address);
 
     // get accrued protocol fees
-    const protocolA0 = await contract.userTokenBalances(owner.address, token0.address);
-    const protocolA1 = await contract.userTokenBalances(owner.address, token1.address);
+    const protocolA0 = await contract.accountBalances(owner.address, token0.address);
+    const protocolA1 = await contract.accountBalances(owner.address, token1.address);
 
     await contract.connect(compoundor).withdrawBalance(token0.address, compoundor.address, b0);
     await contract.connect(compoundor).withdrawBalance(token1.address, compoundor.address, b1);
