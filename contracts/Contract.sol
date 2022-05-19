@@ -512,7 +512,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 delta0;
         uint256 delta1;
         bool sell0;
-        uint256 total0;
         uint256 totalBonus0;
     }
 
@@ -547,16 +546,15 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
 
         priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(EXP_96);
-        state.total0 = amount0.add(amount1.mul(EXP_96).div(priceX96));
-        state.totalBonus0 = state.total0.mul(totalBonusX64).div(EXP_64);
-
-        // calculate ideal position amounts
-        state.sqrtPriceX96Lower = TickMath.getSqrtRatioAtTick(params.tickLower);
-        state.sqrtPriceX96Upper = TickMath.getSqrtRatioAtTick(params.tickUpper);
-        (state.positionAmount0, state.positionAmount1) = LiquidityAmounts.getAmountsForLiquidity(state.sqrtPriceX96, state.sqrtPriceX96Lower, state.sqrtPriceX96Upper, EXP_96); // dummy value we just need ratio
+        state.totalBonus0 = amount0.add(amount1.mul(EXP_96).div(priceX96)).mul(totalBonusX64).div(EXP_64);
 
         // swap to correct proportions is requested
         if (params.doSwap) {
+
+            // calculate ideal position amounts
+            state.sqrtPriceX96Lower = TickMath.getSqrtRatioAtTick(params.tickLower);
+            state.sqrtPriceX96Upper = TickMath.getSqrtRatioAtTick(params.tickUpper);
+            (state.positionAmount0, state.positionAmount1) = LiquidityAmounts.getAmountsForLiquidity(state.sqrtPriceX96, state.sqrtPriceX96Lower, state.sqrtPriceX96Upper, EXP_96); // dummy value we just need ratio
 
             // calculate how much of the position needs to be converted to the other token
             if (state.positionAmount0 == 0) {
@@ -648,15 +646,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 maxAddAmount0 = amount0 > state.bonusAmount0 ? amount0.sub(state.bonusAmount0) : 0;
                 maxAddAmount1 = amount1 > state.bonusAmount1 ? amount1.sub(state.bonusAmount1) : 0;
             }
-        }
-
-        // if it didn't swap or rounding to zero / <minSwapRatioX64 and should add on side
-        // dont add anything - otherwise add liquidity crashes
-        if (state.positionAmount0 == 0) {
-            maxAddAmount0 = 0;
-        }
-        if (state.positionAmount1 == 0) {
-            maxAddAmount1 = 0;
         }
     }
 
