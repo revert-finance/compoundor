@@ -7,12 +7,16 @@ const wethAddress = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 const usdcAddress = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 const usdtAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
 const uniAddress = "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+const wbtcAddress = "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
 
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const nonfungiblePositionManagerAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 const swapRouterAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564"
 
-const haydenAddress = "0x11e4857bb9993a50c685a79afad4e6f65d518dda"
+const haydenAddress = "0x11E4857Bb9993a50c685A79AFad4E6F65D518DDa"
+const zeroAddress = "0x0000000000000000000000000000000000000000"
+
+// TODO automcompounder by third party compoundor
 
 describe("AutoCompounder Tests", function () {
 
@@ -23,9 +27,9 @@ describe("AutoCompounder Tests", function () {
       contract = await Contract.deploy(wethAddress, factoryAddress, nonfungiblePositionManagerAddress, swapRouterAddress);
       await contract.deployed();
 
-      nonfungiblePositionManager = await ethers.getContractAt("INonfungiblePositionManager", nonfungiblePositionManagerAddress); 
+      nonfungiblePositionManager = await ethers.getContractAt("INonfungiblePositionManager", nonfungiblePositionManagerAddress);
       factory = await ethers.getContractAt("IUniswapV3Factory", factoryAddress);
-  
+
       [owner, otherAccount] = await ethers.getSigners();
   });
 
@@ -40,6 +44,8 @@ describe("AutoCompounder Tests", function () {
     expect(await contract.totalBonusX64()).to.equal(0);
     expect(await contract.compounderBonusX64()).to.equal(0);
   })
+
+
 
   it("Test swapAndMint", async function () {
     const deadline = await getDeadline()
@@ -59,7 +65,7 @@ describe("AutoCompounder Tests", function () {
     const poolAddress = await factory.getPool(token0, token1, fee);
     const poolContract = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
     const [,currentTick] = await poolContract.slot0()
-    
+
     const minTick = -800000;
     const mediumTick = currentTick - currentTick % 10; // account for tick spacing
     const maxTick = 800000;
@@ -72,14 +78,37 @@ describe("AutoCompounder Tests", function () {
     await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
     await weth.connect(haydenSigner).approve(contract.address, amountETH.div(2))
     await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: minTick, tickUpper:mediumTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: amountETH.div(2)});
-    
+
     // pure weth
     await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
     await weth.connect(haydenSigner).approve(contract.address, amountETH)
     await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: mediumTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: 0});
 
     expect(await contract.balanceOf(haydenAddress)).to.equal(3);
+
   })
+
+  it("test position transfer and withdrawal", async function () {
+    const nftId = 1
+    const haydenSigner = await impersonateAccountAndGetSigner(haydenAddress);
+    const deadline = await getDeadline();
+
+    await nonfungiblePositionManager.connect(haydenSigner)[["safeTransferFrom(address,address,uint256)"]](haydenAddress, contract.address, nftId);
+    const nftOwner = await contract.connect(haydenSigner).callStatic.ownerOf(nftId);
+
+    // expect owner to match og
+    expect(nftOwner).to.equal(haydenAddress);
+    expect(await contract.balanceOf(haydenAddress)).to.equal(1);
+
+    // withdraw token
+    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, 0, true);
+
+    // token no longer in contract
+    expect(await contract.connect(haydenSigner).callStatic.ownerOf(nftId)).to.equal(zeroAddress);
+    expect(await contract.balanceOf(haydenAddress)).to.equal(0);
+
+  })
+
 
   it("Test one sided liquidity position with hayden position 1", async function () {
 
@@ -110,7 +139,101 @@ describe("AutoCompounder Tests", function () {
     const uni = await ethers.getContractAt("IERC20", uniAddress);
     await uni.approve(contract.address, bonus0b);
     await contract.swapAndIncreaseLiquidity({ tokenId: nftId, amount0: bonus0b, amount1: "0", deadline});
+    // withdraw token
+    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, 0, true);
   })
+
+
+
+  it("Test decreaseLiquidityAndCollect", async function () {
+    const nftId = 8
+    const haydenSigner = await impersonateAccountAndGetSigner(haydenAddress)
+    const deadline = await getDeadline()
+    const usdc = await ethers.getContractAt("IERC20", usdcAddress);
+    const usdt = await ethers.getContractAt("IERC20", usdtAddress);
+
+
+    usdcBalancePre = await usdc.balanceOf(haydenAddress);
+    usdtBalancePre = await usdt.balanceOf(haydenAddress);
+
+    // static collect from nft manager
+    const [mngrA0, mngrA1] = await nonfungiblePositionManager.connect(haydenSigner).callStatic.decreaseLiquidity({ tokenId: nftId, liquidity:"100000000", amount0Min: "0", amount1Min: "0", deadline: deadline});
+
+    // transfer to autocompounder contract and do static decreaseLiquidityAndCollect
+    await nonfungiblePositionManager.connect(haydenSigner)[["safeTransferFrom(address,address,uint256)"]](haydenAddress, contract.address, nftId);
+    const [a0, a1] = await contract.connect(haydenSigner).callStatic.decreaseLiquidityAndCollect({ tokenId: nftId, liquidity:"100000000", amount0Min: "0", amount1Min: "0", deadline: deadline, recipient: haydenAddress});
+
+    // expect amounts to match
+    expect(mngrA0).to.equal(a0);
+    expect(mngrA1).to.equal(a1);
+
+    // actually perform the decrese liquidity and colllect
+    const x = await contract.connect(haydenSigner).decreaseLiquidityAndCollect({ tokenId: nftId, liquidity:"100000000", amount0Min: "0", amount1Min: "0", deadline: deadline, recipient: haydenAddress});
+
+
+    // expect post decrease liquidity balances to match pre+amount removed
+    usdcBalancePost = await usdc.balanceOf(haydenAddress);
+    usdtBalancePost = await usdt.balanceOf(haydenAddress);
+    expect(usdcBalancePost).to.equal(usdcBalancePre.add(a0));
+    expect(usdtBalancePost).to.equal(usdtBalancePre.add(a1));
+
+    // withdraw token
+    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, 0, true);
+
+  });
+
+  it("test withdraw balances for all roles", async function () {
+
+
+    const nftId = 108881
+    const nftOwnerAddress =  "0xB5893a338CE1E5304732D223C703A65125765be2";
+    const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
+    const deadline = await getDeadline()
+
+    const compoundor = otherAccount;
+
+    const [a0, a1] = await nonfungiblePositionManager.connect(nftOwnerSigner).callStatic.collect([nftId, nftOwnerAddress, "1000000000000000000000000000000", "1000000000000000000000000000000"]);
+
+    // transfer NFT to autocompounder
+    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256)"]](nftOwnerAddress, contract.address, nftId);
+
+    const token0 = await ethers.getContractAt("IERC20", wbtcAddress);
+    const token1 = await ethers.getContractAt("IERC20", wethAddress);
+
+    // check autocompound result and gas costs
+    const [b0,b1, compounded0, compounded1] = await contract.connect(compoundor).callStatic.autoCompound({tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline})
+    const totalBonusX64 = await contract.totalBonusX64();
+    const compounderBonusX64 = await contract.compounderBonusX64();
+
+    // execute autocompound (from owner contract)
+    await contract.connect(compoundor).autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline })
+
+    // get amounts leftover in buffer
+    const buffer0 = await contract.accountBalances(nftOwnerAddress, token0.address);
+    const buffer1 = await contract.accountBalances(nftOwnerAddress, token1.address);
+
+    // get accrued protocol fees
+    const protocolA0 = await contract.accountBalances(owner.address, token0.address);
+    const protocolA1 = await contract.accountBalances(owner.address, token1.address);
+
+    await contract.connect(compoundor).withdrawBalance(token0.address, compoundor.address, b0);
+    await contract.connect(compoundor).withdrawBalance(token1.address, compoundor.address, b1);
+    await contract.connect(owner).withdrawBalance(token0.address, owner.address, protocolA0);
+    await contract.connect(owner).withdrawBalance(token1.address, owner.address, protocolA1);
+    await contract.connect(nftOwnerSigner).withdrawBalance(token0.address, nftOwnerAddress, buffer0);
+    await contract.connect(nftOwnerSigner).withdrawBalance(token1.address, nftOwnerAddress, buffer1);
+
+
+    expect(await token0.balanceOf(contract.address)).to.equal(0);
+    expect(await token1.balanceOf(contract.address)).to.equal(0);
+
+
+    await contract.connect(nftOwnerSigner).withdrawToken(nftId, nftOwnerAddress, 0, true);
+
+
+
+
+  });
 
 
   it("Test main functionality with hayden position 8", async function () {
@@ -123,9 +246,7 @@ describe("AutoCompounder Tests", function () {
     const [a0, a1] = await nonfungiblePositionManager.connect(haydenSigner).callStatic.collect([nftId, haydenAddress, "1000000000000000000000000000000", "1000000000000000000000000000000"]);
 
     // add NFT to autocompounder
-    expect(await contract.balanceOf(haydenAddress)).to.equal(0);
     await nonfungiblePositionManager.connect(haydenSigner)[["safeTransferFrom(address,address,uint256)"]](haydenAddress, contract.address, nftId);
-    expect(await contract.balanceOf(haydenAddress)).to.equal(1);
 
     // add liquidity (one)
     const usdc = await ethers.getContractAt("IERC20", usdcAddress);
