@@ -45,7 +45,32 @@ describe("AutoCompounder Tests", function () {
     expect(await contract.compounderBonusX64()).to.equal(0);
   })
 
+  it("Test random positions", async function () {
+    const minBalanceToSafeTransfer = BigNumber.from("1341651530816015440")
+    const totalSupply = await nonfungiblePositionManager.totalSupply();
 
+    const positionIndices = [345, 367, 14003, 54999, 144000];
+
+    //for (let i = totalSupply - 1000; i < totalSupply - 500; i++) {
+    for(let i of positionIndices) {
+      const tokenId = await nonfungiblePositionManager.tokenByIndex(i);
+      const ownerAddress = await nonfungiblePositionManager.ownerOf(tokenId);
+      const ownerBalance = await ethers.provider.getBalance(ownerAddress)
+      if (ownerBalance.gt(minBalanceToSafeTransfer)) {
+        const position = await nonfungiblePositionManager.positions(tokenId);
+        const poolAddress = await factory.getPool(position.token0, position.token1, position.fee);
+        const poolContract = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
+        const slot0 = await poolContract.slot0()
+        if (slot0.observationCardinality > 1) {
+          const ownerSigner = await impersonateAccountAndGetSigner(ownerAddress)
+          await nonfungiblePositionManager.connect(ownerSigner)[["safeTransferFrom(address,address,uint256)"]](ownerAddress, contract.address, tokenId);
+          const deadline = await getDeadline();
+          const [bonus0, bonus1] = await contract.callStatic.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline });
+          await contract.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline });
+        }
+      }
+    }
+  })
 
   it("Test swapAndMint", async function () {
     const deadline = await getDeadline()

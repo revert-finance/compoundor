@@ -134,7 +134,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     
             // swap to position ratio (considering estimated fee)
             (state.amount0, state.amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1) = _swapToPriceRatio(swapParams);
-                    
+
             // deposit liquidity into tokenId
             if (state.maxAddAmount0 > 0 || state.maxAddAmount1 > 0) {
                 (, compounded0, compounded1) = nonfungiblePositionManager.increaseLiquidity(
@@ -486,9 +486,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     function _getTWAPTick(IUniswapV3Pool pool) internal view returns (int24) {
         uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = 0; // from (before)
-        secondsAgos[1] = 300; // from (before)
+        secondsAgos[1] = 60; // from (before)
         (int56[] memory tickCumulatives, ) = pool.observe(secondsAgos);
-        return int24((tickCumulatives[0] - tickCumulatives[1]) / 300);
+        return int24((tickCumulatives[0] - tickCumulatives[1]) / 60);
     }
 
     function _requireMaxTickDifference(int24 tick, int24 other, uint32 maxDifference) internal pure {
@@ -505,6 +505,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 positionAmount1;
         int24 tick;
         int24 otherTick;
+        uint16 observationCardinality;
         uint160 sqrtPriceX96;
         uint160 sqrtPriceX96Lower;
         uint160 sqrtPriceX96Upper;
@@ -529,6 +530,44 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         bool doSwap;
     }
 
+    function _addBonusToDelta(BonusConversion bc, uint256 totalBonus0, uint256 amount0, uint256 amount1, uint256 _delta0, bool _sell0, uint256 priceX96) internal pure returns (uint256 bonusAmount0, uint256 bonusAmount1, uint256 delta0, bool sell0) {
+        if (bc == BonusConversion.TOKEN_0) {
+
+           delta0 = _delta0;
+           sell0 = _sell0;
+
+           bonusAmount0 = totalBonus0;
+            if (sell0) {
+                if (delta0 >= totalBonus0) {
+                    delta0 = delta0.sub(totalBonus0);
+                } else {
+                    delta0 = totalBonus0.sub(delta0);
+                    sell0 = false;
+                }
+            } else {
+                delta0 = delta0.add(totalBonus0);
+                if (delta0 > amount1.mul(EXP_96).div(priceX96)) {
+                    delta0 = amount1.mul(EXP_96).div(priceX96);
+                }
+            }
+        } else if (bc == BonusConversion.TOKEN_1) {
+            bonusAmount1 = totalBonus0.mul(priceX96).div(EXP_96);
+            if (!sell0) {
+                if (delta0 >= totalBonus0) {
+                    delta0 = delta0.sub(totalBonus0);
+                } else {
+                    delta0 = totalBonus0.sub(delta0);
+                    sell0 = true;
+                }
+            } else {
+                delta0 = delta0.add(totalBonus0);
+                if (delta0 > amount0) {
+                    delta0 = amount0;
+                }
+            }
+        }
+    }
+
     function _swapToPriceRatio(SwapParams memory params) internal returns (uint256 amount0, uint256 amount1, uint256 priceX96, uint256 maxAddAmount0, uint256 maxAddAmount1) {
         
         SwapState memory state;
@@ -538,13 +577,16 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         
         // get price
         IUniswapV3Pool pool = IUniswapV3Pool(factory.getPool(params.token0, params.token1, params.fee));
-
-        (state.sqrtPriceX96,state.tick,,,,,) = pool.slot0();
+        
+        (state.sqrtPriceX96,state.tick,,state.observationCardinality,,,) = pool.slot0();
+        
+        // can only get twap for pool with tick history
+        require(state.observationCardinality > 1, "no tick history");
 
         // check that price is not too far from TWAP (protect from price manipulation attacks)
         state.otherTick = _getTWAPTick(pool);
         _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
-
+        
         priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(EXP_96);
         state.totalBonus0 = amount0.add(amount1.mul(EXP_96).div(priceX96)).mul(totalBonusX64).div(EXP_64);
 
@@ -573,39 +615,15 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 }
             }
 
-            // adjust delta considering bonus payment mode
+            // adjust delta and bonus amounts considering bonus payment mode
             if (!params.isOwner) {
-                if (params.bc == BonusConversion.TOKEN_0) {
-                    state.bonusAmount0 = state.totalBonus0;
-                    if (state.sell0) {
-                        if (state.delta0 >= state.totalBonus0) {
-                            state.delta0 = state.delta0.sub(state.totalBonus0);
-                        } else {
-                            state.delta0 = state.totalBonus0.sub(state.delta0);
-                            state.sell0 = false;
-                        }
-                    } else {
-                        state.delta0 = state.delta0.add(state.totalBonus0);
-                        if (state.delta0 > amount1.mul(EXP_96).div(priceX96)) {
-                            state.delta0 = amount1.mul(EXP_96).div(priceX96);
-                        }
-                    }
-                } else if (params.bc == BonusConversion.TOKEN_1) {
-                    state.bonusAmount1 = state.totalBonus0.mul(priceX96).div(EXP_96);
-                    if (!state.sell0) {
-                        if (state.delta0 >= state.totalBonus0) {
-                            state.delta0 = state.delta0.sub(state.totalBonus0);
-                        } else {
-                            state.delta0 = state.totalBonus0.sub(state.delta0);
-                            state.sell0 = true;
-                        }
-                    } else {
-                        state.delta0 = state.delta0.add(state.totalBonus0);
-                        if (state.delta0 > amount0) {
-                            state.delta0 = amount0;
-                        }
-                    }
-                }
+                (state.bonusAmount0, state.bonusAmount1, state.delta0, state.sell0) = _addBonusToDelta(params.bc,
+                                                                                                       state.totalBonus0,
+                                                                                                       amount0,
+                                                                                                       amount1,
+                                                                                                       state.delta0,
+                                                                                                       state.sell0,
+                                                                                                       priceX96);
             }
 
             // only swap when swap big enough
