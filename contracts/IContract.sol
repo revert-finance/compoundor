@@ -56,6 +56,14 @@ interface IContract is IERC721Receiver {
     function balanceOf(address account) external view returns (uint256 balance);
 
     /**
+     * @notice Returns balance of token of account
+     * @param account Address of account
+     * @param token Address of token
+     * @return balance amount of token for account
+     */
+    function accountBalances(address account, address token) external view returns (uint256 balance);
+
+    /**
      * @notice Removes a NFT from the protocol and safe transfers it to address to
      * @param tokenId TokenId of token to remove
      * @param to Address to send to
@@ -68,6 +76,14 @@ interface IContract is IERC721Receiver {
         bytes memory data,
         bool withdrawBalances
     ) external;
+
+    /**
+     * @notice Withdraws token balance for a address and token
+     * @param token Address of token to withdraw
+     * @param to Address to send to
+     * @param amount amount to withdraw
+     */
+    function withdrawBalance(address token, address to, uint256 amount) external;
 
     /// @notice how bonus should be converted
     enum BonusConversion { NONE, TOKEN_0, TOKEN_1 }
