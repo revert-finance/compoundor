@@ -134,7 +134,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     
             // swap to position ratio (considering estimated fee)
             (state.amount0, state.amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1) = _swapToPriceRatio(swapParams);
-                    
+
             // deposit liquidity into tokenId
             if (state.maxAddAmount0 > 0 || state.maxAddAmount1 > 0) {
                 (, compounded0, compounded1) = nonfungiblePositionManager.increaseLiquidity(
@@ -486,9 +486,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     function _getTWAPTick(IUniswapV3Pool pool) internal view returns (int24) {
         uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = 0; // from (before)
-        secondsAgos[1] = 300; // from (before)
+        secondsAgos[1] = 60; // from (before)
         (int56[] memory tickCumulatives, ) = pool.observe(secondsAgos);
-        return int24((tickCumulatives[0] - tickCumulatives[1]) / 300);
+        return int24((tickCumulatives[0] - tickCumulatives[1]) / 60);
     }
 
     function _requireMaxTickDifference(int24 tick, int24 other, uint32 maxDifference) internal pure {
@@ -505,6 +505,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         uint256 positionAmount1;
         int24 tick;
         int24 otherTick;
+        uint16 observationCardinality;
         uint160 sqrtPriceX96;
         uint160 sqrtPriceX96Lower;
         uint160 sqrtPriceX96Upper;
@@ -538,13 +539,16 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         
         // get price
         IUniswapV3Pool pool = IUniswapV3Pool(factory.getPool(params.token0, params.token1, params.fee));
-
-        (state.sqrtPriceX96,state.tick,,,,,) = pool.slot0();
+        
+        (state.sqrtPriceX96,state.tick,,state.observationCardinality,,,) = pool.slot0();
+        
+        // can only get twap for pool with tick history
+        require(state.observationCardinality > 1, "no tick history");
 
         // check that price is not too far from TWAP (protect from price manipulation attacks)
         state.otherTick = _getTWAPTick(pool);
         _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
-
+        
         priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(EXP_96);
         state.totalBonus0 = amount0.add(amount1.mul(EXP_96).div(priceX96)).mul(totalBonusX64).div(EXP_64);
 
