@@ -530,6 +530,44 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         bool doSwap;
     }
 
+    function _addBonusToDelta(BonusConversion bc, uint256 totalBonus0, uint256 amount0, uint256 amount1, uint256 _delta0, bool _sell0, uint256 priceX96) internal pure returns (uint256 bonusAmount0, uint256 bonusAmount1, uint256 delta0, bool sell0) {
+        delta0 = _delta0;
+        sell0 = _sell0;
+
+        if (bc == BonusConversion.TOKEN_0) {
+
+           bonusAmount0 = totalBonus0;
+            if (sell0) {
+                if (delta0 >= totalBonus0) {
+                    delta0 = delta0.sub(totalBonus0);
+                } else {
+                    delta0 = totalBonus0.sub(delta0);
+                    sell0 = false;
+                }
+            } else {
+                delta0 = delta0.add(totalBonus0);
+                if (delta0 > amount1.mul(EXP_96).div(priceX96)) {
+                    delta0 = amount1.mul(EXP_96).div(priceX96);
+                }
+            }
+        } else if (bc == BonusConversion.TOKEN_1) {
+            bonusAmount1 = totalBonus0.mul(priceX96).div(EXP_96);
+            if (!sell0) {
+                if (delta0 >= totalBonus0) {
+                    delta0 = delta0.sub(totalBonus0);
+                } else {
+                    delta0 = totalBonus0.sub(delta0);
+                    sell0 = true;
+                }
+            } else {
+                delta0 = delta0.add(totalBonus0);
+                if (delta0 > amount0) {
+                    delta0 = amount0;
+                }
+            }
+        }
+    }
+
     function _swapToPriceRatio(SwapParams memory params) internal returns (uint256 amount0, uint256 amount1, uint256 priceX96, uint256 maxAddAmount0, uint256 maxAddAmount1) {
         
         SwapState memory state;
@@ -577,39 +615,15 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 }
             }
 
-            // adjust delta considering bonus payment mode
+            // adjust delta and bonus amounts considering bonus payment mode
             if (!params.isOwner) {
-                if (params.bc == BonusConversion.TOKEN_0) {
-                    state.bonusAmount0 = state.totalBonus0;
-                    if (state.sell0) {
-                        if (state.delta0 >= state.totalBonus0) {
-                            state.delta0 = state.delta0.sub(state.totalBonus0);
-                        } else {
-                            state.delta0 = state.totalBonus0.sub(state.delta0);
-                            state.sell0 = false;
-                        }
-                    } else {
-                        state.delta0 = state.delta0.add(state.totalBonus0);
-                        if (state.delta0 > amount1.mul(EXP_96).div(priceX96)) {
-                            state.delta0 = amount1.mul(EXP_96).div(priceX96);
-                        }
-                    }
-                } else if (params.bc == BonusConversion.TOKEN_1) {
-                    state.bonusAmount1 = state.totalBonus0.mul(priceX96).div(EXP_96);
-                    if (!state.sell0) {
-                        if (state.delta0 >= state.totalBonus0) {
-                            state.delta0 = state.delta0.sub(state.totalBonus0);
-                        } else {
-                            state.delta0 = state.totalBonus0.sub(state.delta0);
-                            state.sell0 = true;
-                        }
-                    } else {
-                        state.delta0 = state.delta0.add(state.totalBonus0);
-                        if (state.delta0 > amount0) {
-                            state.delta0 = amount0;
-                        }
-                    }
-                }
+                (state.bonusAmount0, state.bonusAmount1, state.delta0, state.sell0) = _addBonusToDelta(params.bc,
+                                                                                                       state.totalBonus0,
+                                                                                                       amount0,
+                                                                                                       amount1,
+                                                                                                       state.delta0,
+                                                                                                       state.sell0,
+                                                                                                       priceX96);
             }
 
             // only swap when swap big enough
