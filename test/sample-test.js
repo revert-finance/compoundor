@@ -40,9 +40,8 @@ describe("AutoCompounder Tests", function () {
     expect(await contract.totalBonusX64()).to.equal(maxBonus.sub(1));
     expect(await contract.compounderBonusX64()).to.equal(maxBonus.sub(2));
     await expect(contract.setBonus(maxBonus, maxBonus)).to.be.reverted;
-    await expect(contract.setBonus(0, 0)).to.be.reverted;
-    await contract.setBonus(1, 0);
-    expect(await contract.totalBonusX64()).to.equal(1);
+    await contract.setBonus(0, 0);
+    expect(await contract.totalBonusX64()).to.equal(0);
     expect(await contract.compounderBonusX64()).to.equal(0);
   })
 
@@ -260,7 +259,6 @@ describe("AutoCompounder Tests", function () {
     const haydenSigner = await impersonateAccountAndGetSigner(haydenAddress)
     const deadline = await getDeadline()
 
-    const compoundor = otherAccount;
     // get collect amount (for later amount checks)
     const [a0, a1] = await nonfungiblePositionManager.connect(haydenSigner).callStatic.collect([nftId, haydenAddress, "1000000000000000000000000000000", "1000000000000000000000000000000"]);
 
