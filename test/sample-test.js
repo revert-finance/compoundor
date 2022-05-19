@@ -46,7 +46,7 @@ describe("AutoCompounder Tests", function () {
   })
 
   it("Test random positions", async function () {
-    const minBalanceToSafeTransfer = BigNumber.from("1341651530816015440")
+    const minBalanceToSafeTransfer = BigNumber.from("500000").mul(await ethers.provider.getGasPrice()) 
     const totalSupply = await nonfungiblePositionManager.totalSupply();
 
     const positionIndices = [345, 367, 14003, 54999, 144000];
@@ -63,7 +63,7 @@ describe("AutoCompounder Tests", function () {
         const slot0 = await poolContract.slot0()
         if (slot0.observationCardinality > 1) {
           const ownerSigner = await impersonateAccountAndGetSigner(ownerAddress)
-          await nonfungiblePositionManager.connect(ownerSigner)[["safeTransferFrom(address,address,uint256)"]](ownerAddress, contract.address, tokenId);
+          await nonfungiblePositionManager.connect(ownerSigner)[["safeTransferFrom(address,address,uint256)"]](ownerAddress, contract.address, tokenId, { gasLimit: 500000 });
           const deadline = await getDeadline();
           const [bonus0, bonus1] = await contract.callStatic.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline });
           await contract.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline });
