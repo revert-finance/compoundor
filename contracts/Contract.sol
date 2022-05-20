@@ -107,7 +107,11 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
      * @return compounded0 Amount of token0 that was compounded
      * @return compounded1 Amount of token1 that was compounded
      */
-    function autoCompound(AutoCompoundParams calldata params) override external nonReentrant returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1) {
+    function autoCompound(AutoCompoundParams memory params) 
+        override 
+        external 
+        nonReentrant 
+        returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1) {
 
         require(ownerOf[params.tokenId] != address(0), "!found");
         require(params.deadline < block.timestamp + MAX_DEADLINE_IN_FUTURE, "deadline>allowed");
@@ -120,7 +124,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         );
 
         // get position info
-        (, , state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, , , , , ) = nonfungiblePositionManager.positions(params.tokenId);
+        (, , state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, , , , , ) = 
+            nonfungiblePositionManager.positions(params.tokenId);
+
         state.tokenOwner = ownerOf[params.tokenId];
 
         // add previous balances from given tokens
@@ -130,10 +136,23 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         // only if there are balances to work with - start autocompounding process
         if (state.amount0 > 0 || state.amount1 > 0) {
 
-            SwapParams memory swapParams = SwapParams(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.amount0, state.amount1, params.deadline, params.bonusConversion, state.tokenOwner == msg.sender, params.doSwap);
+            SwapParams memory swapParams = SwapParams(
+                state.token0, 
+                state.token1, 
+                state.fee, 
+                state.tickLower, 
+                state.tickUpper, 
+                state.amount0, 
+                state.amount1, 
+                params.deadline, 
+                params.bonusConversion, 
+                state.tokenOwner == msg.sender, 
+                params.doSwap
+            );
     
             // swap to position ratio (considering estimated fee)
-            (state.amount0, state.amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1) = _swapToPriceRatio(swapParams);
+            (state.amount0, state.amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1) = 
+                _swapToPriceRatio(swapParams);
 
             // deposit liquidity into tokenId
             if (state.maxAddAmount0 > 0 || state.maxAddAmount1 > 0) {
@@ -194,8 +213,10 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
                 accountBalances[msg.sender][state.token0] = accountBalances[msg.sender][state.token0].add(compounderFees0);
                 accountBalances[msg.sender][state.token1] = accountBalances[msg.sender][state.token1].add(compounderFees1);
-                accountBalances[owner()][state.token0] = accountBalances[owner()][state.token0].add(state.amount0Fees.sub(compounderFees0));
-                accountBalances[owner()][state.token1] = accountBalances[owner()][state.token1].add(state.amount1Fees.sub(compounderFees1));
+                accountBalances[owner()][state.token0] = 
+                    accountBalances[owner()][state.token0].add(state.amount0Fees.sub(compounderFees0));
+                accountBalances[owner()][state.token1] = 
+                    accountBalances[owner()][state.token1].add(state.amount1Fees.sub(compounderFees1));
 
                 bonus0 = compounderFees0;
                 bonus1 = compounderFees1;
@@ -261,10 +282,36 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
         (state.addedAmount0, state.addedAmount1) = _prepareAdd(params.token0, params.token1, params.amount0, params.amount1);
 
-        SwapParams memory swapParams = SwapParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, state.addedAmount0, state.addedAmount1, params.deadline, BonusConversion.NONE, true, true);
+        SwapParams memory swapParams = SwapParams(
+            params.token0, 
+            params.token1, 
+            params.fee, 
+            params.tickLower, 
+            params.tickUpper, 
+            state.addedAmount0, 
+            state.addedAmount1, 
+            params.deadline, 
+            BonusConversion.NONE, 
+            true, 
+            true);
+
         (state.swappedAmount0, state.swappedAmount1,,,) = _swapToPriceRatio(swapParams);
 
-        INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams(params.token0, params.token1, params.fee, params.tickLower, params.tickUpper, state.swappedAmount0, state.swappedAmount1, 0, 0, address(this), params.deadline);
+        INonfungiblePositionManager.MintParams memory mintParams = 
+            INonfungiblePositionManager.MintParams(
+                params.token0, 
+                params.token1, 
+                params.fee, 
+                params.tickLower, 
+                params.tickUpper,
+                state.swappedAmount0, 
+                state.swappedAmount1, 
+                0,
+                0,
+                address(this),
+                params.deadline
+            );
+
         (tokenId, liquidity, amount0, amount1) = nonfungiblePositionManager.mint(mintParams);
 
         _addToken(tokenId, params.recipient, false);
@@ -306,14 +353,36 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
         SwapAndIncreaseLiquidityState memory state;
 
-        (, , state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, , , , , ) = nonfungiblePositionManager.positions(params.tokenId);
+        (, , state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, , , , , ) = 
+            nonfungiblePositionManager.positions(params.tokenId);
 
         (state.addedAmount0, state.addedAmount1) = _prepareAdd(state.token0, state.token1, params.amount0, params.amount1);
 
-        SwapParams memory swapParams = SwapParams(state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, state.addedAmount0, state.addedAmount1, params.deadline, BonusConversion.NONE, true, true);
+        SwapParams memory swapParams = SwapParams(
+            state.token0, 
+            state.token1, 
+            state.fee, 
+            state.tickLower, 
+            state.tickUpper, 
+            state.addedAmount0, 
+            state.addedAmount1, 
+            params.deadline, 
+            BonusConversion.NONE, 
+            true, 
+            true
+        );
+
         (state.swappedAmount0, state.swappedAmount1,,,) = _swapToPriceRatio(swapParams);
 
-        INonfungiblePositionManager.IncreaseLiquidityParams memory increaseLiquidityParams = INonfungiblePositionManager.IncreaseLiquidityParams(params.tokenId, state.swappedAmount0, state.swappedAmount1, 0, 0, params.deadline);
+        INonfungiblePositionManager.IncreaseLiquidityParams memory increaseLiquidityParams = 
+            INonfungiblePositionManager.IncreaseLiquidityParams(
+                params.tokenId, 
+                state.swappedAmount0, 
+                state.swappedAmount1, 
+                0, 
+                0, 
+                params.deadline
+            );
 
         (liquidity, amount0, amount1) = nonfungiblePositionManager.increaseLiquidity(increaseLiquidityParams);
 
@@ -329,10 +398,32 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
      * @return amount0 amount of token0 removed and collected
      * @return amount1 amount of token1 removed and collected
      */
-    function decreaseLiquidityAndCollect(DecreaseLiquidityAndCollectParams calldata params) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
+    function decreaseLiquidityAndCollect(DecreaseLiquidityAndCollectParams calldata params) 
+        override 
+        external 
+        payable 
+        nonReentrant 
+        returns (uint256 amount0, uint256 amount1) 
+    {
         require(ownerOf[params.tokenId] == msg.sender, "!owner");
-        (amount0, amount1) = nonfungiblePositionManager.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams(params.tokenId, params.liquidity, params.amount0Min, params.amount1Min, params.deadline));
-        INonfungiblePositionManager.CollectParams memory collectParams = INonfungiblePositionManager.CollectParams(params.tokenId, params.recipient, LiquidityAmounts.toUint128(amount0), LiquidityAmounts.toUint128(amount1));
+        (amount0, amount1) = nonfungiblePositionManager.decreaseLiquidity(
+            INonfungiblePositionManager.DecreaseLiquidityParams(
+                params.tokenId, 
+                params.liquidity, 
+                params.amount0Min, 
+                params.amount1Min,
+                params.deadline
+            )
+        );
+
+        INonfungiblePositionManager.CollectParams memory collectParams = 
+            INonfungiblePositionManager.CollectParams(
+                params.tokenId, 
+                params.recipient, 
+                LiquidityAmounts.toUint128(amount0), 
+                LiquidityAmounts.toUint128(amount1)
+            );
+
         nonfungiblePositionManager.collect(collectParams);
     }
 
@@ -342,7 +433,13 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
      * @return amount0 amount of token0 collected
      * @return amount1 amount of token1 collected
      */
-    function collect(INonfungiblePositionManager.CollectParams calldata params) override external payable nonReentrant returns (uint256 amount0, uint256 amount1) {
+    function collect(INonfungiblePositionManager.CollectParams calldata params) 
+        override 
+        external 
+        payable 
+        nonReentrant 
+        returns (uint256 amount0, uint256 amount1) 
+    {
         require(ownerOf[params.tokenId] == msg.sender, "!owner");
         return nonfungiblePositionManager.collect(params);
     }
@@ -404,7 +501,10 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     }
 
     // prepares adding specified amounts, handles weth wrapping, handles cases when more than necesary is added
-    function _prepareAdd(address token0, address token1, uint amount0, uint amount1) internal returns (uint amountAdded0, uint amountAdded1) {
+    function _prepareAdd(address token0, address token1, uint amount0, uint amount1) 
+        internal 
+        returns (uint amountAdded0, uint amountAdded1)
+    {
           // wrap ether sent
         if (msg.value > 0) {
             (bool success,) = payable(weth).call{ value: msg.value }("");
@@ -530,8 +630,10 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         bool doSwap;
     }
 
-    function _swapToPriceRatio(SwapParams memory params) internal returns (uint256 amount0, uint256 amount1, uint256 priceX96, uint256 maxAddAmount0, uint256 maxAddAmount1) {
-        
+    function _swapToPriceRatio(SwapParams memory params) 
+        internal 
+        returns (uint256 amount0, uint256 amount1, uint256 priceX96, uint256 maxAddAmount0, uint256 maxAddAmount1) 
+    {    
         SwapState memory state;
 
         amount0 = params.amount0;
@@ -558,7 +660,11 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             // calculate ideal position amounts
             state.sqrtPriceX96Lower = TickMath.getSqrtRatioAtTick(params.tickLower);
             state.sqrtPriceX96Upper = TickMath.getSqrtRatioAtTick(params.tickUpper);
-            (state.positionAmount0, state.positionAmount1) = LiquidityAmounts.getAmountsForLiquidity(state.sqrtPriceX96, state.sqrtPriceX96Lower, state.sqrtPriceX96Upper, EXP_96); // dummy value we just need ratio
+            (state.positionAmount0, state.positionAmount1) = LiquidityAmounts.getAmountsForLiquidity(
+                                                                state.sqrtPriceX96, 
+                                                                state.sqrtPriceX96Lower, 
+                                                                state.sqrtPriceX96Upper, 
+                                                                EXP_96); // dummy value we just need ratio
 
             // calculate how much of the position needs to be converted to the other token
             if (state.positionAmount0 == 0) {
@@ -615,7 +721,11 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             // only swap when swap big enough
             if (state.delta0 > 0) {
                 if (state.sell0) {
-                    uint256 amountOut = _swap(abi.encodePacked(params.token0, params.fee, params.token1), state.delta0, params.deadline);
+                    uint256 amountOut = _swap(
+                                            abi.encodePacked(params.token0, params.fee, params.token1), 
+                                            state.delta0, 
+                                            params.deadline
+                                        );
                     amount0 = amount0.sub(state.delta0);
                     amount1 = amount1.add(amountOut);
                 } else {
