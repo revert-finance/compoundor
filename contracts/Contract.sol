@@ -197,29 +197,36 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             accountBalances[state.tokenOwner][state.token0] = state.amount0.sub(compounded0).sub(state.amount0Fees);
             accountBalances[state.tokenOwner][state.token1] = state.amount1.sub(compounded1).sub(state.amount1Fees);
 
-            // distribute fees -  handle 3 cases (contract owner / nft owner / oneone else)
-            if (owner() == msg.sender) {
+            // distribute fees -  handle 3 cases (nft owner / contract owner / anyone else)
+            if (state.tokenOwner == msg.sender) {
+                bonus0 = 0;
+                bonus1 = 0;
+            } else if (owner() == msg.sender) {
                 accountBalances[msg.sender][state.token0] = accountBalances[msg.sender][state.token0].add(state.amount0Fees);
                 accountBalances[msg.sender][state.token1] = accountBalances[msg.sender][state.token1].add(state.amount1Fees);
 
                 bonus0 = state.amount0Fees;
                 bonus1 = state.amount1Fees;
-            } else if (state.tokenOwner == msg.sender) {
-                bonus0 = 0;
-                bonus1 = 0;
             } else {
-                uint256 compounderFees0 = state.amount0Fees.mul(compounderBonusX64).div(totalBonusX64);
-                uint256 compounderFees1 = state.amount1Fees.mul(compounderBonusX64).div(totalBonusX64);
+                uint64 protocolBonusX64 = totalBonusX64 - compounderBonusX64;
+                uint256 protocolFees0 = state.amount0Fees.mul(protocolBonusX64).div(totalBonusX64);
+                uint256 protocolFees1 = state.amount1Fees.mul(protocolBonusX64).div(totalBonusX64);
 
-                accountBalances[msg.sender][state.token0] = accountBalances[msg.sender][state.token0].add(compounderFees0);
-                accountBalances[msg.sender][state.token1] = accountBalances[msg.sender][state.token1].add(compounderFees1);
+                bonus0 = state.amount0Fees.sub(protocolFees0);
+                bonus1 = state.amount1Fees.sub(protocolFees1);
+
+                accountBalances[msg.sender][state.token0] =
+                    accountBalances[msg.sender][state.token0].add(bonus0);
+
+                accountBalances[msg.sender][state.token1] =
+                    accountBalances[msg.sender][state.token1].add(bonus1);
+
                 accountBalances[owner()][state.token0] = 
-                    accountBalances[owner()][state.token0].add(state.amount0Fees.sub(compounderFees0));
-                accountBalances[owner()][state.token1] = 
-                    accountBalances[owner()][state.token1].add(state.amount1Fees.sub(compounderFees1));
+                    accountBalances[owner()][state.token0].add(protocolFees0);
 
-                bonus0 = compounderFees0;
-                bonus1 = compounderFees1;
+                accountBalances[owner()][state.token1] = 
+                    accountBalances[owner()][state.token1].add(protocolFees1);
+
             }
         }
 
