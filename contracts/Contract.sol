@@ -57,6 +57,31 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         swapRouter = _swapRouter;
     }
 
+
+    /**
+     * @notice Management method to lower bonus or change ratio between total and compounder bonus (onlyOwner)
+     * @param _totalBonusX64 new total bonus (can't be higher than current total bonus)
+     * @param _compounderBonusX64 new compounder bonus
+     */
+    function setBonus(uint64 _totalBonusX64, uint64 _compounderBonusX64) external override onlyOwner {
+        require(_totalBonusX64 <= totalBonusX64, ">totalBonusX64");
+        require(_compounderBonusX64 <= _totalBonusX64, "compounderBonusX64>totalBonusX64");
+        totalBonusX64 = _totalBonusX64;
+        compounderBonusX64 = _compounderBonusX64;
+        emit BonusUpdated(msg.sender, _totalBonusX64, _compounderBonusX64);
+    }
+
+    /**
+     * @notice Management method to change the max tick difference from twap to allow swaps (onlyOwner)
+     * @param _maxTWAPTickDifference new max tick difference
+     */
+    function setMaxTWAPTickDifference(uint32 _maxTWAPTickDifference) external override onlyOwner {
+        maxTWAPTickDifference = _maxTWAPTickDifference;
+        emit MaxTWAPTickDifferenceUpdated(msg.sender, _maxTWAPTickDifference);
+    }
+
+
+
     /**
      * @dev When receiving a Uniswap V3 NFT, deposits token with `from` as owner
      */
@@ -228,28 +253,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         }
 
         emit AutoCompounded(msg.sender, params.tokenId, compounded0, compounded1, bonus0, bonus1);
-    }
-
-    /**
-     * @notice Management method to lower bonus or change ratio between total and compounder bonus (onlyOwner)
-     * @param _totalBonusX64 new total bonus (can't be higher than current total bonus)
-     * @param _compounderBonusX64 new compounder bonus
-     */
-    function setBonus(uint64 _totalBonusX64, uint64 _compounderBonusX64) external onlyOwner {
-        require(_totalBonusX64 <= totalBonusX64, ">totalBonusX64");
-        require(_compounderBonusX64 <= _totalBonusX64, "compounderBonusX64>totalBonusX64");
-        totalBonusX64 = _totalBonusX64;
-        compounderBonusX64 = _compounderBonusX64;
-        emit BonusUpdated(msg.sender, _totalBonusX64, _compounderBonusX64);
-    }
-
-    /**
-     * @notice Management method to change the max tick difference from twap to allow swaps (onlyOwner)
-     * @param _maxTWAPTickDifference new max tick difference
-     */
-    function setMaxTWAPTickDifference(uint32 _maxTWAPTickDifference) external onlyOwner {
-        maxTWAPTickDifference = _maxTWAPTickDifference;
-        emit MaxTWAPTickDifferenceUpdated(msg.sender, _maxTWAPTickDifference);
     }
 
     struct SwapAndMintState {
