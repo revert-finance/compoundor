@@ -111,8 +111,8 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         override 
         external 
         nonReentrant 
-        returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1) {
-
+        returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1) 
+    {
         require(ownerOf[params.tokenId] != address(0), "!found");
         require(params.deadline < block.timestamp + MAX_DEADLINE_IN_FUTURE, "deadline>allowed");
 
@@ -718,7 +718,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
                 }
             }
 
-            // only swap when swap big enough
             if (state.delta0 > 0) {
                 if (state.sell0) {
                     uint256 amountOut = _swap(
