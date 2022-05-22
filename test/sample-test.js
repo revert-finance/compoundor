@@ -16,7 +16,6 @@ const swapRouterAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564"
 const haydenAddress = "0x11E4857Bb9993a50c685A79AFad4E6F65D518DDa"
 const zeroAddress = "0x0000000000000000000000000000000000000000"
 
-// TODO automcompounder by third party compoundor
 
 describe("AutoCompounder Tests", function () {
 
@@ -34,12 +33,26 @@ describe("AutoCompounder Tests", function () {
   });
 
   it("Test setBonus", async function () {
-    const maxBonus = await contract.MAX_BONUS_X64();
-    await expect(contract.setBonus(maxBonus.add(1), maxBonus.add(1))).to.be.reverted;
-    await contract.setBonus(maxBonus.sub(1), maxBonus.sub(2));
-    expect(await contract.totalBonusX64()).to.equal(maxBonus.sub(1));
-    expect(await contract.compounderBonusX64()).to.equal(maxBonus.sub(2));
-    await expect(contract.setBonus(maxBonus, maxBonus)).to.be.reverted;
+
+    const totalBonus = await contract.totalBonusX64();
+    const compounderBonus = await contract.compounderBonusX64();
+
+    // total bonus is 2%
+    expect(totalBonus).to.equal(BigNumber.from(2).pow(64).div(50));
+
+    // total bonus can only be decreased
+    await expect(contract.setBonus(totalBonus.add(1), compounderBonus)).to.be.reverted;
+    await contract.setBonus(totalBonus.sub(1), compounderBonus.sub(1));
+    const totalBonusPost = await contract.totalBonusX64();
+    const compounderBonusPost = await contract.compounderBonusX64();
+    expect(totalBonusPost).to.equal(totalBonus.sub(1));
+    expect(compounderBonusPost).to.equal(compounderBonus.sub(1));
+
+    // compounder bonus can be increased, but can't be greater than max bonus
+    await expect(contract.setBonus(totalBonusPost, compounderBonusPost.add(1)));
+    await expect(contract.setBonus(totalBonusPost, totalBonusPost.add(1))).to.be.reverted;
+    expect(await contract.compounderBonusX64()).to.equal(compounderBonusPost.add(1));
+
     await contract.setBonus(0, 0);
     expect(await contract.totalBonusX64()).to.equal(0);
     expect(await contract.compounderBonusX64()).to.equal(0);
@@ -120,11 +133,6 @@ describe("AutoCompounder Tests", function () {
 
   })
 
-
-  it("Test swapAndIncreaseLiquidity", function() {
-    // TODO
-
-  });
 
   it("test position transfer and withdrawal", async function () {
     const nftId = 1
