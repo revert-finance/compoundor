@@ -16,7 +16,6 @@ const swapRouterAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564"
 const haydenAddress = "0x11E4857Bb9993a50c685A79AFad4E6F65D518DDa"
 const zeroAddress = "0x0000000000000000000000000000000000000000"
 
-// TODO automcompounder by third party compoundor
 
 describe("AutoCompounder Tests", function () {
 
@@ -34,16 +33,37 @@ describe("AutoCompounder Tests", function () {
   });
 
   it("Test setBonus", async function () {
-    const maxBonus = await contract.MAX_BONUS_X64();
-    await expect(contract.setBonus(maxBonus.add(1), maxBonus.add(1))).to.be.reverted;
-    await contract.setBonus(maxBonus.sub(1), maxBonus.sub(2));
-    expect(await contract.totalBonusX64()).to.equal(maxBonus.sub(1));
-    expect(await contract.compounderBonusX64()).to.equal(maxBonus.sub(2));
-    await expect(contract.setBonus(maxBonus, maxBonus)).to.be.reverted;
+
+    const totalBonus = await contract.totalBonusX64();
+    const compounderBonus = await contract.compounderBonusX64();
+
+    // total bonus is 2%
+    expect(totalBonus).to.equal(BigNumber.from(2).pow(64).div(50));
+
+    // total bonus can only be decreased
+    await expect(contract.setBonus(totalBonus.add(1), compounderBonus)).to.be.reverted;
+    await contract.setBonus(totalBonus.sub(1), compounderBonus.sub(1));
+    const totalBonusPost = await contract.totalBonusX64();
+    const compounderBonusPost = await contract.compounderBonusX64();
+    expect(totalBonusPost).to.equal(totalBonus.sub(1));
+    expect(compounderBonusPost).to.equal(compounderBonus.sub(1));
+
+    // compounder bonus can be increased, but can't be greater than max bonus
+    await expect(contract.setBonus(totalBonusPost, compounderBonusPost.add(1)));
+    await expect(contract.setBonus(totalBonusPost, totalBonusPost.add(1))).to.be.reverted;
+    expect(await contract.compounderBonusX64()).to.equal(compounderBonusPost.add(1));
+
     await contract.setBonus(0, 0);
     expect(await contract.totalBonusX64()).to.equal(0);
     expect(await contract.compounderBonusX64()).to.equal(0);
-  })
+  });
+
+  it("Test setMaxTWAPTickDifference", async function() {
+    const maxTTD = await contract.maxTWAPTickDifference();
+    await contract.setMaxTWAPTickDifference(maxTTD - 50);
+    const maxTTDPost = await contract.maxTWAPTickDifference();
+    expect(maxTTD- 50).to.equal(maxTTDPost);
+  });
 
   it("Test random positions", async function () {
     const minBalanceToSafeTransfer = BigNumber.from("500000").mul(await ethers.provider.getGasPrice()) 
@@ -113,17 +133,23 @@ describe("AutoCompounder Tests", function () {
 
   })
 
+
   it("test position transfer and withdrawal", async function () {
     const nftId = 1
     const haydenSigner = await impersonateAccountAndGetSigner(haydenAddress);
     const deadline = await getDeadline();
 
     await nonfungiblePositionManager.connect(haydenSigner)[["safeTransferFrom(address,address,uint256)"]](haydenAddress, contract.address, nftId);
-    const nftOwner = await contract.connect(haydenSigner).callStatic.ownerOf(nftId);
+    const nftOwner = await contract.ownerOf(nftId);
+    const nftStored = await contract.accountTokens(haydenAddress, 0);
 
     // expect owner to match og
     expect(nftOwner).to.equal(haydenAddress);
+    expect(nftStored).to.equal(nftId);
     expect(await contract.balanceOf(haydenAddress)).to.equal(1);
+
+
+
 
     // withdraw token
     await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, 0, true);
@@ -207,6 +233,75 @@ describe("AutoCompounder Tests", function () {
 
   });
 
+  it("test that amounts match for all roles (no swap)", async function () {
+
+
+    const nftId = 17193
+    const nftOwnerAddress =  "0x2706c4587510c470A6825AE33bB13e5D1718677c";
+    const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
+    const deadline = await getDeadline()
+
+    const compoundor = otherAccount;
+
+    // get uncollected fee amounts
+    const [a0, a1] = await nonfungiblePositionManager.connect(nftOwnerSigner).callStatic.collect([nftId,
+                                                                                                  nftOwnerAddress,
+                                                                                                  "1000000000000000000000000000000",
+                                                                                                  "1000000000000000000000000000000"]);
+
+    // transfer NFT to autocompounder
+    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256)"]](nftOwnerAddress, contract.address, nftId);
+
+    const token0 = await ethers.getContractAt("IERC20", wbtcAddress);
+    const token1 = await ethers.getContractAt("IERC20", wethAddress);
+
+    // check autocompound result and gas costs
+    const [b0,b1, compounded0, compounded1] = await contract.connect(compoundor).callStatic.autoCompound({tokenId: nftId,
+                                                                                                          bonusConversion: 0,
+                                                                                                          withdrawBonus: false,
+                                                                                                          doSwap: false,
+                                                                                                          deadline})
+    const totalBonusX64 = await contract.totalBonusX64();
+    const compounderBonusX64 = await contract.compounderBonusX64();
+    const protocolFee0 = b0.mul(totalBonusX64).div(compounderBonusX64).sub(b0);
+    const protocolFee1 = b1.mul(totalBonusX64).div(compounderBonusX64).sub(b1).sub(1); // protocol fee gets rounded down if required
+    const buffer0 = a0.sub(compounded0).sub(b0).sub(protocolFee0);
+    const buffer1 = a1.sub(compounded1).sub(b1).sub(protocolFee1);
+
+    // execute autocompound (from owner contract)
+    await contract.connect(compoundor).autoCompound({tokenId: nftId,
+                                                     bonusConversion: 0,
+                                                     withdrawBonus: false,
+                                                     doSwap: false,
+                                                     deadline});
+
+
+
+    const summedAmounts0 = compounded0.add(b0).add(protocolFee0).add(buffer0);
+    const summedAmounts1 = compounded1.add(b1).add(protocolFee1).add(buffer1);
+
+    // summed amounts match uncollected amounts
+    expect(summedAmounts0).to.equal(a0);
+    expect(summedAmounts1).to.equal(a1);
+
+    // bonus is correct proportion of compounded fees
+    expect(b0).to.equal(compounded0.mul(compounderBonusX64).div(BigNumber.from(2).pow(64)));
+    expect(b1).to.equal(compounded1.mul(compounderBonusX64).div(BigNumber.from(2).pow(64)).add(1)); // compoundor bonus gets rounded up if required
+
+    // contract balaces match expected amounts
+    expect(await contract.accountBalances(compoundor.address, token0.address)).to.equal(b0);
+    expect(await contract.accountBalances(compoundor.address, token1.address)).to.equal(b1);
+    expect(await contract.accountBalances(owner.address, token0.address)).to.equal(protocolFee0);
+    expect(await contract.accountBalances(owner.address, token1.address)).to.equal(protocolFee1);
+    expect(await contract.accountBalances(nftOwnerAddress, token0.address)).to.equal(buffer0);
+    expect(await contract.accountBalances(nftOwnerAddress, token1.address)).to.equal(buffer1);
+
+
+    await contract.connect(nftOwnerSigner).withdrawToken(nftId, nftOwnerAddress, 0, true);
+
+
+  });
+
   it("test withdraw balances for all roles", async function () {
 
 
@@ -254,8 +349,6 @@ describe("AutoCompounder Tests", function () {
 
 
     await contract.connect(nftOwnerSigner).withdrawToken(nftId, nftOwnerAddress, 0, true);
-
-
 
 
   });
