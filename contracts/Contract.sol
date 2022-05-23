@@ -259,7 +259,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
             _withdrawFullBalances(state.token0, state.token1, msg.sender);
         }
 
-        emit AutoCompounded(msg.sender, params.tokenId, compounded0, compounded1, bonus0, bonus1);
+        emit AutoCompounded(msg.sender, params.tokenId, compounded0, compounded1, bonus0, bonus1, state.token0, state.token1);
     }
 
     struct SwapAndMintState {

@@ -29,7 +29,9 @@ interface IContract is IERC721Receiver {
         uint256 amountAdded0,
         uint256 amountAdded1,
         uint256 bonus0,
-        uint256 bonus1
+        uint256 bonus1,
+        address token0,
+        address token1
     );
 
     /// @notice The weth address
