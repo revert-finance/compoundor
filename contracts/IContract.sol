@@ -44,6 +44,14 @@ interface IContract is IERC721Receiver {
     /// @notice The nonfungible position manager address with which this staking contract is compatible
     function swapRouter() external view returns (ISwapRouter);
 
+    /// @notice Total bonus which is payed for autocompounding
+    function totalBonusX64() external view returns (uint64);
+
+    /// @notice Bonus which is payed to compounder - less or equal to totalBonusX64
+    function compounderBonusX64() external view returns (uint64);
+
+    /// @notice Max tick difference between TWAP tick and current price to allow operations
+    function maxTWAPTickDifference() external view returns (uint32);
 
     /**
      * @notice Management method to lower bonus or change ratio between total and compounder bonus (onlyOwner)
@@ -61,6 +69,9 @@ interface IContract is IERC721Receiver {
 
     /// @notice Owner of a managed NFT
     function ownerOf(uint256 tokenId) external view returns (address owner);
+
+    /// @notice Tokens of account by index
+    function accountTokens(address account, uint256 index) external view returns (uint256 tokenId);
 
     /**
      * @notice Returns amount of NFTs for a given account

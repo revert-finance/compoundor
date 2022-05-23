@@ -34,9 +34,9 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     uint32 constant public MAX_DEADLINE_IN_FUTURE = 500;
 
     // changable config values
-    uint64 public totalBonusX64 = MAX_BONUS_X64; // 2%
-    uint64 public compounderBonusX64 = MAX_BONUS_X64 / 2; // 1%
-    uint32 public maxTWAPTickDifference = 100; // 1%
+    uint64 public override totalBonusX64 = MAX_BONUS_X64; // 2%
+    uint64 public override compounderBonusX64 = MAX_BONUS_X64 / 2; // 1%
+    uint32 public override maxTWAPTickDifference = 100; // 1%
 
     // wrapped native token address
     address override public weth;
@@ -47,7 +47,7 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
     ISwapRouter public override swapRouter;
 
     mapping(uint256 => address) public override ownerOf;
-    mapping(address => uint256[]) public accountTokens;
+    mapping(address => uint256[]) public override accountTokens;
     mapping(address => mapping(address => uint256)) public override accountBalances;
 
     constructor(address _weth, IUniswapV3Factory _factory, INonfungiblePositionManager _nonfungiblePositionManager, ISwapRouter _swapRouter) {
