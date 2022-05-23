@@ -26,6 +26,9 @@ describe("AutoCompounder Tests", function () {
       contract = await Contract.deploy(wethAddress, factoryAddress, nonfungiblePositionManagerAddress, swapRouterAddress);
       await contract.deployed();
 
+      // use interface instead of contract to test
+      contract = await ethers.getContractAt("IContract", contract.address)
+
       nonfungiblePositionManager = await ethers.getContractAt("INonfungiblePositionManager", nonfungiblePositionManagerAddress);
       factory = await ethers.getContractAt("IUniswapV3Factory", factoryAddress);
 
