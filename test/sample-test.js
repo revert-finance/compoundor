@@ -273,6 +273,10 @@ describe("AutoCompounder Tests", function () {
     // add NFT to autocompounder
     await nonfungiblePositionManager.connect(haydenSigner)[["safeTransferFrom(address,address,uint256)"]](haydenAddress, contract.address, nftId);
 
+    // check token added
+    expect(await contract.balanceOf(haydenAddress)).to.equal(1);
+    expect(await contract.accountTokens(haydenAddress, 0)).to.equal(nftId);
+
     // add liquidity (one)
     const usdc = await ethers.getContractAt("IERC20", usdcAddress);
     const usdt = await ethers.getContractAt("IERC20", usdtAddress);
