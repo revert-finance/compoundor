@@ -80,8 +80,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         emit MaxTWAPTickDifferenceUpdated(msg.sender, _maxTWAPTickDifference);
     }
 
-
-
     /**
      * @dev When receiving a Uniswap V3 NFT, deposits token with `from` as owner
      */

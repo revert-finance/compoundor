@@ -8,6 +8,7 @@
     "@uniswap/smart-order-router": "^2.5.26",
     "@uniswap/v3-sdk": "^3.8.2",
     "chai": "^4.3.6",
+    "dotenv": "^16.0.1",
     "ethereum-waffle": "^3.4.0",
     "ethers": "^5.5.4",
     "hardhat": "^2.8.4",

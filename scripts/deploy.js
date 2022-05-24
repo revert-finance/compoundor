@@ -1,7 +1,6 @@
 require('dotenv').config()
 
 const hre = require("hardhat");
-const { ethers } = require("hardhat");
 
 const wethAddress = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" //polygon "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"

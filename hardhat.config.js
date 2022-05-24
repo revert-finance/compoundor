@@ -1,3 +1,5 @@
+require('dotenv').config()
+
 require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-ethers");
 require('hardhat-contract-sizer');
@@ -33,7 +35,7 @@ module.exports = {
   networks: {
     hardhat: {
       forking: {
-        url: "https://eth-mainnet.alchemyapi.io/v2/gwRYWylWRij2jXTnPXR90v-YqXh96PDX",
+        url: "https://eth-mainnet.alchemyapi.io/v2/" + process.env.ALCHEMY_KEY,
         blockNumber: 14667418 // 2022-04-27
       }
     },
