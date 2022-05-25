@@ -41,8 +41,7 @@ module.exports = {
     },
     polygon: {
       url: "https://polygon-rpc.com",
-      chainId: 137,
-      gasPrice: 100000000000
+      chainId: 137
     }
   }
 };
