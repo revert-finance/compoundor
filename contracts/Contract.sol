@@ -16,9 +16,6 @@ import "./external/uniswap/v3-periphery/interfaces/INonfungiblePositionManager.s
 
 import "./IContract.sol";
 
-// TODO temp
-import "hardhat/console.sol";
-
 contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
 
     using SafeMath for uint256;
@@ -56,7 +53,6 @@ contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
         nonfungiblePositionManager = _nonfungiblePositionManager;
         swapRouter = _swapRouter;
     }
-
 
     /**
      * @notice Management method to lower bonus or change ratio between total and compounder bonus (onlyOwner)
