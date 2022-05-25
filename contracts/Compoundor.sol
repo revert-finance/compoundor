@@ -14,9 +14,9 @@ import "./external/uniswap/v3-core/libraries/TickMath.sol";
 import "./external/uniswap/v3-periphery/libraries/LiquidityAmounts.sol";
 import "./external/uniswap/v3-periphery/interfaces/INonfungiblePositionManager.sol";
 
-import "./IContract.sol";
+import "./ICompoundor.sol";
 
-contract Contract is IContract, ReentrancyGuard, Ownable, Multicall {
+contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
 
     using SafeMath for uint256;
 

@@ -1,10 +1,12 @@
-# Auto-Compounder
+# revert compoundor
 
-This repository contains the smart contracts for the revert Auto-Compounder.
+This repository contains the smart contracts for the revert compoundor.
+
+You can find detailled information in our [Gitbook Docs](https://app.gitbook.com/).
 
 ## Bug bounty
 
-This repository is subject to the Immunefi bug bounty program, which you can find here.
+This repository is subject to the Immunefi bug bounty program, which you can find [here](https://immunefi.com/projects/).
 
 ## Local deployment
 
