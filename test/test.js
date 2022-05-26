@@ -22,12 +22,12 @@ describe("AutoCompounder Tests", function () {
   let contract, nonfungiblePositionManager, factory, owner, otherAccount;
 
   beforeEach(async function () {
-      const Contract = await ethers.getContractFactory("Contract");
+      const Contract = await ethers.getContractFactory("Compoundor");
       contract = await Contract.deploy(wethAddress, factoryAddress, nonfungiblePositionManagerAddress, swapRouterAddress);
       await contract.deployed();
 
       // use interface instead of contract to test
-      contract = await ethers.getContractAt("IContract", contract.address)
+      contract = await ethers.getContractAt("ICompoundor", contract.address)
 
       nonfungiblePositionManager = await ethers.getContractAt("INonfungiblePositionManager", nonfungiblePositionManagerAddress);
       factory = await ethers.getContractAt("IUniswapV3Factory", factoryAddress);
@@ -73,24 +73,17 @@ describe("AutoCompounder Tests", function () {
     const totalSupply = await nonfungiblePositionManager.totalSupply();
 
     const positionIndices = [345, 367, 14003, 54999, 144000];
-
-    //for (let i = totalSupply - 1000; i < totalSupply - 500; i++) {
     for(let i of positionIndices) {
+    //for (let i = totalSupply - 900; i < totalSupply - 500; i++) {
       const tokenId = await nonfungiblePositionManager.tokenByIndex(i);
       const ownerAddress = await nonfungiblePositionManager.ownerOf(tokenId);
       const ownerBalance = await ethers.provider.getBalance(ownerAddress)
       if (ownerBalance.gt(minBalanceToSafeTransfer)) {
-        const position = await nonfungiblePositionManager.positions(tokenId);
-        const poolAddress = await factory.getPool(position.token0, position.token1, position.fee);
-        const poolContract = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
-        const slot0 = await poolContract.slot0()
-        if (slot0.observationCardinality > 1) {
-          const ownerSigner = await impersonateAccountAndGetSigner(ownerAddress)
-          await nonfungiblePositionManager.connect(ownerSigner)[["safeTransferFrom(address,address,uint256)"]](ownerAddress, contract.address, tokenId, { gasLimit: 500000 });
-          const deadline = await getDeadline();
-          const [bonus0, bonus1] = await contract.callStatic.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline });
-          await contract.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline });
-        }
+        const ownerSigner = await impersonateAccountAndGetSigner(ownerAddress)
+        await nonfungiblePositionManager.connect(ownerSigner)[["safeTransferFrom(address,address,uint256)"]](ownerAddress, contract.address, tokenId, { gasLimit: 500000 });
+        const deadline = await getDeadline();
+        const [bonus0, bonus1] = await contract.callStatic.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline });
+        await contract.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline });
       }
     }
   })
