@@ -12,6 +12,8 @@ async function main() {
 
   const signer = new hre.ethers.Wallet(process.env.DEPLOYMENT_PRIVATE_KEY, hre.ethers.provider)
 
+  console.log("Deploying on", hre.network.name)
+
   const nativeTokenAddress = hre.network.name == "polygon" ? wmaticAddress : wethAddress
 
   const Contract = await hre.ethers.getContractFactory("Contract", signer);

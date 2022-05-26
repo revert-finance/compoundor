@@ -16,16 +16,16 @@ interface ICompoundor is IERC721Receiver {
     event MaxTWAPTickDifferenceUpdated(address account, uint32 maxTWAPTickDifference);
 
     // token movements
-    event TokenDeposited(address indexed account, uint256 tokenId);
-    event TokenWithdrawn(address indexed account, address to, uint256 tokenId);
+    event TokenDeposited(address account, uint256 tokenId);
+    event TokenWithdrawn(address account, address to, uint256 tokenId);
 
     // balance movements
-    event BalanceWithdrawn(address indexed account, address token, address to, uint256 amount);
+    event BalanceWithdrawn(address account, address token, address to, uint256 amount);
 
     // autocompound event
     event AutoCompounded(
-        address indexed account,
-        uint256 indexed tokenId,
+        address account,
+        uint256 tokenId,
         uint256 amountAdded0,
         uint256 amountAdded1,
         uint256 bonus0,
