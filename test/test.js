@@ -148,7 +148,7 @@ describe("AutoCompounder Tests", function () {
 
 
     // withdraw token
-    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, 0, true);
+    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, true, 0);
 
     // token no longer in contract
     expect(await contract.connect(haydenSigner).callStatic.ownerOf(nftId)).to.equal(zeroAddress);
@@ -187,7 +187,7 @@ describe("AutoCompounder Tests", function () {
     await uni.approve(contract.address, bonus0b);
     await contract.swapAndIncreaseLiquidity({ tokenId: nftId, amount0: bonus0b, amount1: "0", deadline});
     // withdraw token
-    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, 0, true);
+    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, true, 0);
   })
 
 
@@ -225,7 +225,7 @@ describe("AutoCompounder Tests", function () {
     expect(usdtBalancePost).to.equal(usdtBalancePre.add(a1));
 
     // withdraw token
-    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, 0, true);
+    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, true, 0);
 
   });
 
@@ -293,7 +293,7 @@ describe("AutoCompounder Tests", function () {
     expect(await contract.accountBalances(nftOwnerAddress, token1.address)).to.equal(buffer1);
 
 
-    await contract.connect(nftOwnerSigner).withdrawToken(nftId, nftOwnerAddress, 0, true);
+    await contract.connect(nftOwnerSigner).withdrawToken(nftId, nftOwnerAddress, true, 0);
 
 
   });
@@ -339,14 +339,10 @@ describe("AutoCompounder Tests", function () {
     await contract.connect(nftOwnerSigner).withdrawBalance(token0.address, nftOwnerAddress, buffer0);
     await contract.connect(nftOwnerSigner).withdrawBalance(token1.address, nftOwnerAddress, buffer1);
 
-
     expect(await token0.balanceOf(contract.address)).to.equal(0);
     expect(await token1.balanceOf(contract.address)).to.equal(0);
 
-
-    await contract.connect(nftOwnerSigner).withdrawToken(nftId, nftOwnerAddress, 0, true);
-
-
+    await contract.connect(nftOwnerSigner).withdrawToken(nftId, nftOwnerAddress, true, 0);
   });
 
 
@@ -425,7 +421,7 @@ describe("AutoCompounder Tests", function () {
     expect(await usdt.balanceOf(owner.address)).to.gt(0)
 
     // remove token - and remaining balances
-    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, 0, true);
+    await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, true, 0);
     expect(await contract.balanceOf(haydenAddress)).to.equal(0);
     expect(await contract.accountBalances(haydenAddress, usdcAddress)).to.equal(0);
     expect(await contract.accountBalances(haydenAddress, usdtAddress)).to.equal(0);

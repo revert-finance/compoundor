@@ -20,6 +20,8 @@ interface ICompoundor is IERC721Receiver {
     event TokenWithdrawn(address account, address to, uint256 tokenId);
 
     // balance movements
+    event BalanceAdded(address account, address token, uint256 amount);
+    event BalanceRemoved(address account, address token, uint256 amount);
     event BalanceWithdrawn(address account, address token, address to, uint256 amount);
 
     // autocompound event
@@ -94,14 +96,14 @@ interface ICompoundor is IERC721Receiver {
      * @notice Removes a NFT from the protocol and safe transfers it to address to
      * @param tokenId TokenId of token to remove
      * @param to Address to send to
-     * @param data data which is sent with the safeTransferFrom call (optional)
      * @param withdrawBalances When true sends the available balances for token0 and token1 as well
+     * @param data data which is sent with the safeTransferFrom call (optional)
      */
     function withdrawToken(
         uint256 tokenId,
         address to,
-        bytes memory data,
-        bool withdrawBalances
+        bool withdrawBalances,
+        bytes memory data
     ) external;
 
     /**

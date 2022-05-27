@@ -213,16 +213,16 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
             }
 
             // calculate remaining tokens for owner
-            accountBalances[state.tokenOwner][state.token0] = state.amount0.sub(compounded0).sub(state.amount0Fees);
-            accountBalances[state.tokenOwner][state.token1] = state.amount1.sub(compounded1).sub(state.amount1Fees);
+            _setBalance(state.tokenOwner, state.token0, state.amount0.sub(compounded0).sub(state.amount0Fees));
+            _setBalance(state.tokenOwner, state.token1, state.amount1.sub(compounded1).sub(state.amount1Fees));
 
             // distribute fees -  handle 3 cases (nft owner / contract owner / anyone else)
             if (state.tokenOwner == msg.sender) {
                 bonus0 = 0;
                 bonus1 = 0;
             } else if (owner() == msg.sender) {
-                accountBalances[msg.sender][state.token0] = accountBalances[msg.sender][state.token0].add(state.amount0Fees);
-                accountBalances[msg.sender][state.token1] = accountBalances[msg.sender][state.token1].add(state.amount1Fees);
+                _increaseBalance(msg.sender, state.token0, state.amount0Fees);
+                _increaseBalance(msg.sender, state.token1, state.amount1Fees);
 
                 bonus0 = state.amount0Fees;
                 bonus1 = state.amount1Fees;
@@ -234,18 +234,10 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
                 bonus0 = state.amount0Fees.sub(protocolFees0);
                 bonus1 = state.amount1Fees.sub(protocolFees1);
 
-                accountBalances[msg.sender][state.token0] =
-                    accountBalances[msg.sender][state.token0].add(bonus0);
-
-                accountBalances[msg.sender][state.token1] =
-                    accountBalances[msg.sender][state.token1].add(bonus1);
-
-                accountBalances[owner()][state.token0] = 
-                    accountBalances[owner()][state.token0].add(protocolFees0);
-
-                accountBalances[owner()][state.token1] = 
-                    accountBalances[owner()][state.token1].add(protocolFees1);
-
+                _increaseBalance(msg.sender, state.token0, bonus0);
+                _increaseBalance(msg.sender, state.token1, bonus1);
+                _increaseBalance(owner(), state.token0, protocolFees0);
+                _increaseBalance(owner(), state.token1, protocolFees1);
             }
         }
 
@@ -323,8 +315,8 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         emit TokenDeposited(params.recipient, tokenId);
 
         // store balance in favor
-        accountBalances[params.recipient][params.token0] = state.swappedAmount0.sub(amount0);
-        accountBalances[params.recipient][params.token1] = state.swappedAmount1.sub(amount1);
+        _increaseBalance(params.recipient, params.token0, state.swappedAmount0.sub(amount0));
+        _increaseBalance(params.recipient, params.token1, state.swappedAmount1.sub(amount1));
     }
 
     struct SwapAndIncreaseLiquidityState {
@@ -391,8 +383,8 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         (liquidity, amount0, amount1) = nonfungiblePositionManager.increaseLiquidity(increaseLiquidityParams);
 
         // store balance in favor
-        accountBalances[msg.sender][state.token0] = state.swappedAmount0.sub(amount0);
-        accountBalances[msg.sender][state.token1] = state.swappedAmount1.sub(amount1);
+        _increaseBalance(msg.sender, state.token0, state.swappedAmount0.sub(amount0));
+        _increaseBalance(msg.sender, state.token1, state.swappedAmount1.sub(amount1));
     }
 
     /**
@@ -452,14 +444,14 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
      * @notice Removes a NFT from the protocol and safe transfers it to address to
      * @param tokenId TokenId of token to remove
      * @param to Address to send to
-     * @param data data which is sent with the safeTransferFrom call (optional)
      * @param withdrawBalances When true sends the available balances for token0 and token1 as well
+     * @param data data which is sent with the safeTransferFrom call
      */
     function withdrawToken(
         uint256 tokenId,
         address to,
-        bytes memory data,
-        bool withdrawBalances
+        bool withdrawBalances,
+        bytes memory data
     ) external override nonReentrant {
         require(to != address(this), "to==this");
         require(ownerOf[tokenId] == msg.sender, "!owner");
@@ -486,6 +478,23 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         _withdrawBalanceInternal(token, to, balance, amount);
     }
 
+    function _increaseBalance(address account, address token, uint256 amount) internal {
+        accountBalances[account][token] = accountBalances[account][token].add(amount);
+        emit BalanceAdded(account, token, amount);
+    }
+
+    function _setBalance(address account, address token, uint256 amount) internal {
+        uint currentBalance = accountBalances[account][token];
+        
+        if (amount > currentBalance) {
+            accountBalances[account][token] = amount;
+            emit BalanceAdded(account, token, amount.sub(currentBalance));
+        } else if (amount < currentBalance) {
+            accountBalances[account][token] = amount;
+            emit BalanceRemoved(account, token, currentBalance.sub(amount));
+        }
+    }
+
     function _withdrawFullBalances(address token0, address token1, address to) internal {
         uint256 balance0 = accountBalances[msg.sender][token0];
         if (balance0 > 0) {
@@ -500,6 +509,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
     function _withdrawBalanceInternal(address token, address to, uint256 balance, uint256 amount) internal {
         require(amount <= balance, "amount>balance");
         accountBalances[msg.sender][token] = accountBalances[msg.sender][token].sub(amount);
+        emit BalanceRemoved(msg.sender, token, amount);
         SafeERC20.safeTransfer(IERC20(token), to, amount);
         emit BalanceWithdrawn(msg.sender, token, to, amount);
     }
