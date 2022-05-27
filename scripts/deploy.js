@@ -16,7 +16,7 @@ async function main() {
 
   const nativeTokenAddress = hre.network.name == "polygon" ? wmaticAddress : wethAddress
 
-  const Contract = await hre.ethers.getContractFactory("Contract", signer);
+  const Contract = await hre.ethers.getContractFactory("Compoundor", signer);
   const contract = await Contract.deploy(nativeTokenAddress, factoryAddress, nonfungiblePositionManagerAddress, swapRouterAddress);
   await contract.deployed();
 
