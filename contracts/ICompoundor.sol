@@ -130,9 +130,6 @@ interface ICompoundor is IERC721Receiver {
 
         // do swap - to add max amount to position (costs more gas)
         bool doSwap;
-
-        // for swap / add liquidity operations
-        uint256 deadline;
     }
 
     /**

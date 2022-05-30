@@ -28,7 +28,6 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
 
     // max positions
     uint32 constant public MAX_POSITIONS_PER_ADDRESS = 100;
-    uint32 constant public MAX_DEADLINE_IN_FUTURE = 500;
 
     // changable config values
     uint64 public override totalBonusX64 = MAX_BONUS_X64; // 2%
@@ -133,7 +132,6 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1) 
     {
         require(ownerOf[params.tokenId] != address(0), "!found");
-        require(params.deadline < block.timestamp + MAX_DEADLINE_IN_FUTURE, "deadline>allowed");
 
         AutoCompoundState memory state;
 
@@ -163,7 +161,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
                 state.tickUpper, 
                 state.amount0, 
                 state.amount1, 
-                params.deadline, 
+                block.timestamp, 
                 params.bonusConversion, 
                 state.tokenOwner == msg.sender, 
                 params.doSwap
@@ -182,7 +180,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
                         state.maxAddAmount1,
                         0,
                         0,
-                        params.deadline
+                        block.timestamp
                     )
                 );
             }
@@ -271,7 +269,6 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
             uint256 amount1
         )
     {
-        require(params.deadline < block.timestamp + MAX_DEADLINE_IN_FUTURE, "deadline>allowed");
         require(params.token0 != params.token1, "token0==token1");
 
         SwapAndMintState memory state;
@@ -345,8 +342,6 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
             uint256 amount1
         )
     {
-        require(params.deadline < block.timestamp + MAX_DEADLINE_IN_FUTURE, "deadline>allowed");
-
         SwapAndIncreaseLiquidityState memory state;
 
         (, , state.token0, state.token1, state.fee, state.tickLower, state.tickUpper, , , , , ) = 
