@@ -2,7 +2,7 @@
 
 This repository contains the smart contracts for the revert compoundor.
 
-You can find detailled information in our [Gitbook Docs](https://revert-1.gitbook.io/revert).
+You can find detailled information in our [Gitbook Docs](https://revert-1.gitbook.io/revert/technical-docs/auto-compounder).
 
 ## Bug bounty
 
