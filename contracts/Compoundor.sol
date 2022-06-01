@@ -214,7 +214,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
             _setBalance(state.tokenOwner, state.token0, state.amount0.sub(compounded0).sub(state.amount0Fees));
             _setBalance(state.tokenOwner, state.token1, state.amount1.sub(compounded1).sub(state.amount1Fees));
 
-            // distribute fees -  handle 3 cases (nft owner / contract owner / anyone else)
+            // distribute fees - handle 2 cases (nft owner - no protocol bonus / anyone else)
             if (state.tokenOwner == msg.sender) {
                 bonus0 = 0;
                 bonus1 = 0;
