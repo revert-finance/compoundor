@@ -402,15 +402,19 @@ describe("AutoCompounder Tests", function () {
     const bh0 = await contract.accountBalances(haydenAddress, usdcAddress);
     const bh1 = await contract.accountBalances(haydenAddress, usdtAddress);
 
+    // get balances from compounder
+    const bo0 = await contract.accountBalances(owner.address, usdcAddress);
+    const bo1 = await contract.accountBalances(owner.address, usdtAddress);
+
     // calculate sum of bonus / leftovers / compounded amount in ETH
-    const valueETHAfter = bonus0a.add(comp0a).add(bh0).mul(tokenPrice0X96).div(BigNumber.from(2).pow(96)).add(bonus1a.add(comp1a).add(bh1).mul(tokenPrice1X96).div(BigNumber.from(2).pow(96)))
+    const valueETHAfter = bo0.add(comp0a).add(bh0).mul(tokenPrice0X96).div(BigNumber.from(2).pow(96)).add(bo1.add(comp1a).add(bh1).mul(tokenPrice1X96).div(BigNumber.from(2).pow(96)))
 
     // both values should be very close
     expect(valueETHBefore.mul(1000).div(valueETHAfter)).to.be.within(999, 1001)
 
     // withdraw bonus 1 by 1
-    await contract.withdrawBalance(position.token0, owner.address, bonus0)
-    await contract.withdrawBalance(position.token1, owner.address, bonus1)
+    await contract.withdrawBalance(position.token0, owner.address, bo0)
+    await contract.withdrawBalance(position.token1, owner.address, bo1)
     expect(await contract.accountBalances(owner.address, usdcAddress)).to.equal(0);
     expect(await contract.accountBalances(owner.address, usdtAddress)).to.equal(0);
 

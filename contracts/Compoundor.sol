@@ -218,12 +218,6 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
             if (state.tokenOwner == msg.sender) {
                 bonus0 = 0;
                 bonus1 = 0;
-            } else if (owner() == msg.sender) {
-                _increaseBalance(msg.sender, state.token0, state.amount0Fees);
-                _increaseBalance(msg.sender, state.token1, state.amount1Fees);
-
-                bonus0 = state.amount0Fees;
-                bonus1 = state.amount1Fees;
             } else {
                 uint64 protocolBonusX64 = totalBonusX64 - compounderBonusX64;
                 uint256 protocolFees0 = state.amount0Fees.mul(protocolBonusX64).div(totalBonusX64);
