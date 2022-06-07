@@ -142,61 +142,6 @@ interface ICompoundor is IERC721Receiver {
      */
     function autoCompound(AutoCompoundParams calldata params) external returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1);
 
-    /// @notice params for swapAndMint()
-    struct SwapAndMintParams {
-        address token0;
-        address token1;
-        uint24 fee;
-        int24 tickLower;
-        int24 tickUpper;
-        uint256 amount0;
-        uint256 amount1;
-        address recipient;
-        uint256 deadline;
-    }
-    
-    /**
-     * @notice Creates new position (for a already existing pool) swapping to correct ratio and adds it to be autocompounded
-     * @param params Specifies details for position to create and how much of each token is provided (ETH is automatically wrapped)
-     * @return tokenId tokenId of created position
-     * @return liquidity amount of liquidity added
-     * @return amount0 amount of token0 added
-     * @return amount1 amount of token1 added
-     */
-    function swapAndMint(SwapAndMintParams calldata params)
-        external
-        payable
-        returns (
-            uint256 tokenId,
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        );
-
-    /// @notice params for swapAndIncreaseLiquidity()
-    struct SwapAndIncreaseLiquidityParams {
-        uint256 tokenId;
-        uint256 amount0;
-        uint256 amount1;
-        uint256 deadline;
-    }
-
-    /**
-     * @notice Increase liquidity in the correct ratio
-     * @param params Specifies tokenId and much of each token is provided (ETH is automatically wrapped)
-     * @return liquidity amount of liquidity added
-     * @return amount0 amount of token0 added
-     * @return amount1 amount of token1 added
-     */
-    function swapAndIncreaseLiquidity(SwapAndIncreaseLiquidityParams calldata params)
-        external
-        payable
-        returns (
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        );
-
     struct DecreaseLiquidityAndCollectParams {
         uint256 tokenId;
         uint128 liquidity;
@@ -215,7 +160,6 @@ interface ICompoundor is IERC721Receiver {
      */
     function decreaseLiquidityAndCollect(DecreaseLiquidityAndCollectParams calldata params)
         external
-        payable
         returns (uint256 amount0, uint256 amount1);
 
     /**
@@ -224,5 +168,5 @@ interface ICompoundor is IERC721Receiver {
      * @return amount0 amount of token0 collected
      * @return amount1 amount of token1 collected
      */
-    function collect(INonfungiblePositionManager.CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
+    function collect(INonfungiblePositionManager.CollectParams calldata params) external returns (uint256 amount0, uint256 amount1);
 }

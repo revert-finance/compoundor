@@ -88,47 +88,6 @@ describe("AutoCompounder Tests", function () {
     }
   })
 
-  it("Test swapAndMint", async function () {
-    const deadline = await getDeadline()
-    const usdc = await ethers.getContractAt("IERC20", usdcAddress);
-    const weth = await ethers.getContractAt("IERC20", wethAddress);
-
-    const amountETH = BigNumber.from("1000000000000000000")
-    const amountUSDC = BigNumber.from("1000000000")
-
-    const haydenSigner = await impersonateAccountAndGetSigner(haydenAddress)
-
-    const token0 = usdcAddress
-    const token1 = wethAddress
-
-    const fee = 500
-
-    const poolAddress = await factory.getPool(token0, token1, fee);
-    const poolContract = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
-    const [,currentTick] = await poolContract.slot0()
-
-    const minTick = -800000;
-    const mediumTick = currentTick - currentTick % 10; // account for tick spacing
-    const maxTick = 800000;
-
-    // pure eth
-    await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
-    await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: minTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: amountETH});
-
-    // half eth / half weth
-    await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
-    await weth.connect(haydenSigner).approve(contract.address, amountETH.div(2))
-    await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: minTick, tickUpper:mediumTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: amountETH.div(2)});
-
-    // pure weth
-    await usdc.connect(haydenSigner).approve(contract.address, amountUSDC)
-    await weth.connect(haydenSigner).approve(contract.address, amountETH)
-    await contract.connect(haydenSigner).swapAndMint({ token0, token1, fee, tickLower: mediumTick, tickUpper:maxTick, amount0: amountUSDC ,amount1: amountETH, recipient:haydenAddress, deadline}, {value: 0});
-
-    expect(await contract.balanceOf(haydenAddress)).to.equal(3);
-
-  })
-
 
   it("test position transfer and withdrawal", async function () {
     const nftId = 1
@@ -156,7 +115,6 @@ describe("AutoCompounder Tests", function () {
 
   })
 
-
   it("Test one sided liquidity position with hayden position 1", async function () {
 
     const nftId = 1
@@ -164,9 +122,6 @@ describe("AutoCompounder Tests", function () {
     const deadline = await getDeadline()
 
     await nonfungiblePositionManager.connect(haydenSigner)[["safeTransferFrom(address,address,uint256)"]](haydenAddress, contract.address, nftId);
-
-    // add ETH only
-    await contract.connect(haydenSigner).swapAndIncreaseLiquidity({ tokenId: nftId, amount0: "0", amount1: "1000000000", deadline}, {value: "1000000000"});
 
     // check bonus payouts
     const [bonus0a, bonus1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true })
@@ -182,10 +137,6 @@ describe("AutoCompounder Tests", function () {
     // autompound to UNI fees - withdraw and add
     await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: true, doSwap: true })
 
-    // add all collected liquidity - UNI only (from owner to hayden contract - for adding there is no owner check)
-    const uni = await ethers.getContractAt("IERC20", uniAddress);
-    await uni.approve(contract.address, bonus0b);
-    await contract.swapAndIncreaseLiquidity({ tokenId: nftId, amount0: bonus0b, amount1: "0", deadline});
     // withdraw token
     await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, true, 0);
   })
@@ -365,8 +316,6 @@ describe("AutoCompounder Tests", function () {
     const amount = BigNumber.from("100000000");
     await usdc.connect(haydenSigner).approve(contract.address, amount);
     //await usdt.connect(haydenSigner).approve(contract.address, amount)
-
-    await contract.connect(haydenSigner).swapAndIncreaseLiquidity({ tokenId: nftId, amount0: amount, amount1: "0", deadline});
 
     // check autocompound result
     const position = await nonfungiblePositionManager.positions(nftId);
