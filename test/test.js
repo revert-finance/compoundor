@@ -104,8 +104,6 @@ describe("AutoCompounder Tests", function () {
     expect(await contract.balanceOf(haydenAddress)).to.equal(1);
 
 
-
-
     // withdraw token
     await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, true, 0);
 
@@ -182,10 +180,15 @@ describe("AutoCompounder Tests", function () {
 
   it("test that amounts match for all roles (no swap)", async function () {
 
-
     const nftId = 17193
     const nftOwnerAddress =  "0x2706c4587510c470A6825AE33bB13e5D1718677c";
     const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
+
+    // send ether to account - so it has enough to call all the functions
+    await owner.sendTransaction({
+      to: nftOwnerAddress,
+      value: ethers.utils.parseEther("0.01")
+    });
 
     const compoundor = otherAccount;
 
