@@ -385,8 +385,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
      */
     function decreaseLiquidityAndCollect(DecreaseLiquidityAndCollectParams calldata params) 
         override 
-        external 
-        payable 
+        external  
         nonReentrant 
         returns (uint256 amount0, uint256 amount1) 
     {
@@ -420,8 +419,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
      */
     function collect(INonfungiblePositionManager.CollectParams calldata params) 
         override 
-        external 
-        payable 
+        external
         nonReentrant 
         returns (uint256 amount0, uint256 amount1) 
     {
