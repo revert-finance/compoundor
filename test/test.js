@@ -61,11 +61,14 @@ describe("AutoCompounder Tests", function () {
     expect(await contract.compounderBonusX64()).to.equal(0);
   });
 
-  it("Test setMaxTWAPTickDifference", async function() {
+  it("Test setTWAPConfig", async function() {
     const maxTTD = await contract.maxTWAPTickDifference();
-    await contract.setMaxTWAPTickDifference(maxTTD - 50);
+    const twapSecs = await contract.TWAPSeconds();
+    await contract.setTWAPConfig(maxTTD - 50, twapSecs - 50);
     const maxTTDPost = await contract.maxTWAPTickDifference();
+    const twapSecsPost = await contract.TWAPSeconds();
     expect(maxTTD- 50).to.equal(maxTTDPost);
+    expect(twapSecs- 50).to.equal(twapSecsPost);
   });
 
   it("Test random positions", async function () {

@@ -20,7 +20,7 @@ interface ICompoundor is IERC721Receiver {
    
     // config changes
     event BonusUpdated(address account, uint64 totalBonusX64, uint64 compounderBonusX64);
-    event MaxTWAPTickDifferenceUpdated(address account, uint32 maxTWAPTickDifference);
+    event TWAPConfigUpdated(address account, uint32 maxTWAPTickDifference, uint32 TWAPSeconds);
 
     // token movements
     event TokenDeposited(address account, uint256 tokenId);
@@ -64,6 +64,9 @@ interface ICompoundor is IERC721Receiver {
     /// @notice Max tick difference between TWAP tick and current price to allow operations
     function maxTWAPTickDifference() external view returns (uint32);
 
+    /// @notice Number of seconds to use for TWAP calculation
+    function TWAPSeconds() external view returns (uint32);
+
     /**
      * @notice Management method to lower bonus or change ratio between total and compounder bonus (onlyOwner)
      * @param _totalBonusX64 new total bonus (can't be higher than current total bonus)
@@ -71,12 +74,12 @@ interface ICompoundor is IERC721Receiver {
      */
     function setBonus(uint64 _totalBonusX64, uint64 _compounderBonusX64) external;
 
-
     /**
      * @notice Management method to change the max tick difference from twap to allow swaps (onlyOwner)
      * @param _maxTWAPTickDifference new max tick difference
+     * @param _TWAPSeconds new TWAP period seconds
      */
-    function setMaxTWAPTickDifference(uint32 _maxTWAPTickDifference) external;
+    function setTWAPConfig(uint32 _maxTWAPTickDifference, uint32 _TWAPSeconds) external;
 
     /// @notice Owner of a managed NFT
     function ownerOf(uint256 tokenId) external view returns (address owner);

@@ -40,6 +40,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
     uint64 public override totalBonusX64 = MAX_BONUS_X64; // 2%
     uint64 public override compounderBonusX64 = MAX_BONUS_X64 / 2; // 1%
     uint32 public override maxTWAPTickDifference = 100; // 1%
+    uint32 public override TWAPSeconds = 60;
 
     // wrapped native token address
     address override public weth;
@@ -77,9 +78,10 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
      * @notice Management method to change the max tick difference from twap to allow swaps (onlyOwner)
      * @param _maxTWAPTickDifference new max tick difference
      */
-    function setMaxTWAPTickDifference(uint32 _maxTWAPTickDifference) external override onlyOwner {
+    function setTWAPConfig(uint32 _maxTWAPTickDifference, uint32 _TWAPSeconds) external override onlyOwner {
         maxTWAPTickDifference = _maxTWAPTickDifference;
-        emit MaxTWAPTickDifferenceUpdated(msg.sender, _maxTWAPTickDifference);
+        TWAPSeconds = _TWAPSeconds;
+        emit TWAPConfigUpdated(msg.sender, _maxTWAPTickDifference, _TWAPSeconds);
     }
 
     /**
@@ -455,24 +457,22 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         delete ownerOf[tokenId];
     }
 
-    function _getTWAPTick(IUniswapV3Pool pool) internal view returns (int24, bool) {
+    function _getTWAPTick(IUniswapV3Pool pool, uint32 twapPeriod) internal view returns (int24, bool) {
         uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = 0; // from (before)
-        secondsAgos[1] = 60; // from (before)
+        secondsAgos[1] = twapPeriod; // from (before)
         // pool observe may fail when there is not enough history available
         try pool.observe(secondsAgos) returns (int56[] memory tickCumulatives, uint160[] memory) {
-            return (int24((tickCumulatives[0] - tickCumulatives[1]) / 60), true);
+            return (int24((tickCumulatives[0] - tickCumulatives[1]) / twapPeriod), true);
         } catch {
             return (0, false);
-        }        
+        } 
     }
-
     function _requireMaxTickDifference(int24 tick, int24 other, uint32 maxDifference) internal pure {
         require(other > tick && (uint48(other - tick) < maxDifference) ||
         other <= tick && (uint48(tick - other) < maxDifference),
         "price err");
     }
-
     // state used during swap execution
     struct SwapState {
         uint256 bonusAmount0;
@@ -521,14 +521,17 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         
         (state.sqrtPriceX96,state.tick,,,,,) = pool.slot0();
 
-        // check that price is not too far from TWAP (protect from price manipulation attacks)
-        (state.otherTick, state.twapOk) = _getTWAPTick(pool);
-
-        if (state.twapOk) {
-            _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
-        } else {
-            // if there is no valid TWAP 
-            params.doSwap = false;
+        // how many seconds are needed for TWAP protection
+        uint32 tSecs = TWAPSeconds;
+        if (tSecs > 0) {
+            // check that price is not too far from TWAP (protect from price manipulation attacks)
+            (state.otherTick, state.twapOk) = _getTWAPTick(pool, tSecs);
+            if (state.twapOk) {
+                _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
+            } else {
+                // if there is no valid TWAP - disable swap
+                params.doSwap = false;
+            }
         }
         
         priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(EXP_96);
