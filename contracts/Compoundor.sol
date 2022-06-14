@@ -174,7 +174,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
                 params.doSwap
             );
     
-            // swap to position ratio (considering estimated fee)
+            // checks oracle for fair price - swaps to position ratio (considering estimated bonus) - calculates max amount to be added
             (state.amount0, state.amount1, state.priceX96, state.maxAddAmount0, state.maxAddAmount1) = 
                 _swapToPriceRatio(swapParams);
 
@@ -506,6 +506,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         bool doSwap;
     }
 
+    // checks oracle for fair price - swaps to position ratio (considering estimated bonus) - calculates max amount to be added
     function _swapToPriceRatio(SwapParams memory params) 
         internal 
         returns (uint256 amount0, uint256 amount1, uint256 priceX96, uint256 maxAddAmount0, uint256 maxAddAmount1) 
@@ -631,6 +632,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
             maxAddAmount0 = amount0;
             maxAddAmount1 = amount1;
         } else {
+            // in case caller is not owner - max amounts to add are slightly lower than available amounts - to account for bonus payments
             if (params.bc == BonusConversion.NONE) {
                 maxAddAmount0 = amount0.mul(EXP_64).div(uint(totalBonusX64).add(EXP_64));
                 maxAddAmount1 = amount1.mul(EXP_64).div(uint(totalBonusX64).add(EXP_64));
