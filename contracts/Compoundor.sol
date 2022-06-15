@@ -95,7 +95,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
     ) external override nonReentrant returns (bytes4) {
         require(msg.sender == address(nonfungiblePositionManager), "!univ3 pos");
 
-        _addToken(tokenId, from, true);
+        _addToken(tokenId, from);
         emit TokenDeposited(from, tokenId);
         return this.onERC721Received.selector;
     }
@@ -374,48 +374,14 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         emit BalanceWithdrawn(msg.sender, token, to, amount);
     }
 
-    // prepares adding specified amounts, handles weth wrapping, handles cases when more than necesary is added
-    function _prepareAdd(address token0, address token1, uint amount0, uint amount1) 
-        internal 
-        returns (uint amountAdded0, uint amountAdded1)
-    {
-          // wrap ether sent
-        if (msg.value > 0) {
-            (bool success,) = payable(weth).call{ value: msg.value }("");
-            require(success, "eth wrap fail");
-
-            if (weth == token0) {
-                amountAdded0 = msg.value;
-            } else if (weth == token1) {
-                amountAdded1 = msg.value;
-            } else {
-                revert("no weth token");
-            }
-        }
-
-        // get missing tokens (fails if not enough provided)
-        if (amount0 > amountAdded0) {
-            IERC20(token0).transferFrom(msg.sender, address(this), amount0.sub(amountAdded0));
-            amountAdded0 = amount0;
-        }
-        if (amount1 > amountAdded1) {
-            IERC20(token1).transferFrom(msg.sender, address(this), amount1.sub(amountAdded1));
-            amountAdded1 = amount1;
-        }
-
-        _checkApprovals(IERC20(token0), IERC20(token1));
-    }
-
-    function _addToken(uint256 tokenId, address account, bool checkApprovals) internal {
+    function _addToken(uint256 tokenId, address account) internal {
 
         require(accountTokens[account].length < MAX_POSITIONS_PER_ADDRESS, "max positions reached");
 
         // get tokens for this nft
         (, , address token0, address token1, , , , , , , , ) = nonfungiblePositionManager.positions(tokenId);
 
-        if (checkApprovals) {
-            _checkApprovals(IERC20(token0), IERC20(token1));
-        }
+        _checkApprovals(IERC20(token0), IERC20(token1));
 
         accountTokens[account].push(tokenId);
         ownerOf[tokenId] = account;
