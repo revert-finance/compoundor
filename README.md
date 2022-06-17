@@ -6,7 +6,7 @@ You can find detailled information in our [Gitbook Docs](https://revert-1.gitboo
 
 ## Bug bounty
 
-This repository is subject to the Immunefi bug bounty program, which you can find [here](https://immunefi.com/projects/).
+This repository is subject to the Immunefi bug bounty program, which you can find [here](https://immunefi.com/bounty/revert/).
 
 ## Local deployment
 
