@@ -29,7 +29,7 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 1000000,
       },
     }
   },
@@ -37,6 +37,8 @@ module.exports = {
     apiKey: {
       mainnet: process.env.ETHERSCAN_API_KEY_MAINNET,
       polygon: process.env.ETHERSCAN_API_KEY_POLYGON,
+      optimism: process.env.ETHERSCAN_API_KEY_OPTIMISM,
+      arbitrum: process.env.ETHERSCAN_API_KEY_ARBITRUM
     },
   },
   networks: {
@@ -47,8 +49,20 @@ module.exports = {
       }
     },
     polygon: {
-      url: "https://polygon-rpc.com",
+      url: "https://rpc.ankr.com/polygon",
       chainId: 137
+    },
+    mainnet: {
+      url: "https://rpc.ankr.com/eth",
+      chainId: 1
+    },
+    optimism: {
+      url: "https://rpc.ankr.com/optimism",
+      chainId: 10
+    },
+    arbitrum: {
+      url: "https://rpc.ankr.com/arbitrum",
+      chainId: 42161
     }
   }
 };

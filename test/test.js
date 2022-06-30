@@ -190,7 +190,7 @@ describe("AutoCompounder Tests", function () {
     // send ether to account - so it has enough to call all the functions
     await owner.sendTransaction({
       to: nftOwnerAddress,
-      value: ethers.utils.parseEther("0.01")
+      value: ethers.utils.parseEther("0.015")
     });
 
     const compoundor = otherAccount;
