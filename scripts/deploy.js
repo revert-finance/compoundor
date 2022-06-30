@@ -20,6 +20,8 @@ async function main() {
   const contract = await Contract.deploy(nativeTokenAddress, factoryAddress, nonfungiblePositionManagerAddress, swapRouterAddress);
   await contract.deployed();
 
+  await contract.transferOwnership(process.env.MULTISIG_ACCOUNT);
+
   console.log("Deployed at", contract.address)
 }
 
