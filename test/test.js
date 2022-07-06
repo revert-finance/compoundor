@@ -35,30 +35,30 @@ describe("AutoCompounder Tests", function () {
       [owner, otherAccount] = await ethers.getSigners();
   });
 
-  it("Test setBonus", async function () {
+  it("Test setReward", async function () {
 
-    const totalBonus = await contract.totalBonusX64();
-    const compounderBonus = await contract.compounderBonusX64();
+    const totalReward = await contract.totalRewardX64();
+    const compounderReward = await contract.compounderRewardX64();
 
-    // total bonus is 2%
-    expect(totalBonus).to.equal(BigNumber.from(2).pow(64).div(50));
+    // total reward is 2%
+    expect(totalReward).to.equal(BigNumber.from(2).pow(64).div(50));
 
-    // total bonus can only be decreased
-    await expect(contract.setBonus(totalBonus.add(1), compounderBonus)).to.be.reverted;
-    await contract.setBonus(totalBonus.sub(1), compounderBonus.sub(1));
-    const totalBonusPost = await contract.totalBonusX64();
-    const compounderBonusPost = await contract.compounderBonusX64();
-    expect(totalBonusPost).to.equal(totalBonus.sub(1));
-    expect(compounderBonusPost).to.equal(compounderBonus.sub(1));
+    // total reward can only be decreased
+    await expect(contract.setReward(totalReward.add(1), compounderReward)).to.be.reverted;
+    await contract.setReward(totalReward.sub(1), compounderReward.sub(1));
+    const totalRewardPost = await contract.totalRewardX64();
+    const compounderRewardPost = await contract.compounderRewardX64();
+    expect(totalRewardPost).to.equal(totalReward.sub(1));
+    expect(compounderRewardPost).to.equal(compounderReward.sub(1));
 
-    // compounder bonus can be increased, but can't be greater than max bonus
-    await expect(contract.setBonus(totalBonusPost, compounderBonusPost.add(1)));
-    await expect(contract.setBonus(totalBonusPost, totalBonusPost.add(1))).to.be.reverted;
-    expect(await contract.compounderBonusX64()).to.equal(compounderBonusPost.add(1));
+    // compounder reward can be increased, but can't be greater than max reward
+    await expect(contract.setReward(totalRewardPost, compounderRewardPost.add(1)));
+    await expect(contract.setReward(totalRewardPost, totalRewardPost.add(1))).to.be.reverted;
+    expect(await contract.compounderRewardX64()).to.equal(compounderRewardPost.add(1));
 
-    await contract.setBonus(0, 0);
-    expect(await contract.totalBonusX64()).to.equal(0);
-    expect(await contract.compounderBonusX64()).to.equal(0);
+    await contract.setReward(0, 0);
+    expect(await contract.totalRewardX64()).to.equal(0);
+    expect(await contract.compounderRewardX64()).to.equal(0);
   });
 
   it("Test setTWAPConfig", async function() {
@@ -85,8 +85,8 @@ describe("AutoCompounder Tests", function () {
         const ownerSigner = await impersonateAccountAndGetSigner(ownerAddress)
         await nonfungiblePositionManager.connect(ownerSigner)[["safeTransferFrom(address,address,uint256)"]](ownerAddress, contract.address, tokenId, { gasLimit: 500000 });
         const deadline = await getDeadline();
-        const [bonus0, bonus1] = await contract.callStatic.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true });
-        await contract.autoCompound( { tokenId, bonusConversion: 0, withdrawBonus: false, doSwap: true });
+        const [reward0, reward1] = await contract.callStatic.autoCompound( { tokenId, rewardConversion: 0, withdrawReward: false, doSwap: true });
+        await contract.autoCompound( { tokenId, rewardConversion: 0, withdrawReward: false, doSwap: true });
       }
     }
   })
@@ -124,19 +124,19 @@ describe("AutoCompounder Tests", function () {
 
     await nonfungiblePositionManager.connect(haydenSigner)[["safeTransferFrom(address,address,uint256)"]](haydenAddress, contract.address, nftId);
 
-    // check bonus payouts
-    const [bonus0a, bonus1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true })
-    expect(bonus0a).to.gt(0)
-    expect(bonus1a).to.eq(0)
-    const [bonus0b, bonus1b] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, doSwap: true })
-    expect(bonus0b).to.gt(0)
-    expect(bonus1b).to.eq(0)
-    const [bonus0c, bonus1c] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, doSwap: true })
-    expect(bonus0c).to.eq(0)
-    expect(bonus1c).to.gt(0)
+    // check reward payouts
+    const [reward0a, reward1a] = await contract.callStatic.autoCompound( { tokenId: nftId, rewardConversion: 0, withdrawReward: false, doSwap: true })
+    expect(reward0a).to.gt(0)
+    expect(reward1a).to.eq(0)
+    const [reward0b, reward1b] = await contract.callStatic.autoCompound( { tokenId: nftId, rewardConversion: 1, withdrawReward: false, doSwap: true })
+    expect(reward0b).to.gt(0)
+    expect(reward1b).to.eq(0)
+    const [reward0c, reward1c] = await contract.callStatic.autoCompound( { tokenId: nftId, rewardConversion: 2, withdrawReward: false, doSwap: true })
+    expect(reward0c).to.eq(0)
+    expect(reward1c).to.gt(0)
 
     // autompound to UNI fees - withdraw and add
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: true, doSwap: true })
+    await contract.autoCompound( { tokenId: nftId, rewardConversion: 1, withdrawReward: true, doSwap: true })
 
     // withdraw token
     await contract.connect(haydenSigner).withdrawToken(nftId, haydenAddress, true, 0);
@@ -209,20 +209,20 @@ describe("AutoCompounder Tests", function () {
 
     // check autocompound result and gas costs
     const [b0,b1, compounded0, compounded1] = await contract.connect(compoundor).callStatic.autoCompound({tokenId: nftId,
-                                                                                                          bonusConversion: 0,
-                                                                                                          withdrawBonus: false,
+                                                                                                          rewardConversion: 0,
+                                                                                                          withdrawReward: false,
                                                                                                           doSwap: false})
-    const totalBonusX64 = await contract.totalBonusX64();
-    const compounderBonusX64 = await contract.compounderBonusX64();
-    const protocolFee0 = b0.mul(totalBonusX64).div(compounderBonusX64).sub(b0);
-    const protocolFee1 = b1.mul(totalBonusX64).div(compounderBonusX64).sub(b1).sub(1); // protocol fee gets rounded down if required
+    const totalRewardX64 = await contract.totalRewardX64();
+    const compounderRewardX64 = await contract.compounderRewardX64();
+    const protocolFee0 = b0.mul(totalRewardX64).div(compounderRewardX64).sub(b0);
+    const protocolFee1 = b1.mul(totalRewardX64).div(compounderRewardX64).sub(b1).sub(1); // protocol fee gets rounded down if required
     const buffer0 = a0.sub(compounded0).sub(b0).sub(protocolFee0);
     const buffer1 = a1.sub(compounded1).sub(b1).sub(protocolFee1);
 
     // execute autocompound (from owner contract)
     await contract.connect(compoundor).autoCompound({tokenId: nftId,
-                                                     bonusConversion: 0,
-                                                     withdrawBonus: false,
+                                                     rewardConversion: 0,
+                                                     withdrawReward: false,
                                                      doSwap: false});
 
 
@@ -234,9 +234,9 @@ describe("AutoCompounder Tests", function () {
     expect(summedAmounts0).to.equal(a0);
     expect(summedAmounts1).to.equal(a1);
 
-    // bonus is correct proportion of compounded fees
-    expect(b0).to.equal(compounded0.mul(compounderBonusX64).div(BigNumber.from(2).pow(64)));
-    expect(b1).to.equal(compounded1.mul(compounderBonusX64).div(BigNumber.from(2).pow(64)).add(1)); // compoundor bonus gets rounded up if required
+    // reward is correct proportion of compounded fees
+    expect(b0).to.equal(compounded0.mul(compounderRewardX64).div(BigNumber.from(2).pow(64)));
+    expect(b1).to.equal(compounded1.mul(compounderRewardX64).div(BigNumber.from(2).pow(64)).add(1)); // compoundor reward gets rounded up if required
 
     // contract balaces match expected amounts
     expect(await contract.accountBalances(compoundor.address, token0.address)).to.equal(b0);
@@ -271,12 +271,12 @@ describe("AutoCompounder Tests", function () {
     const token1 = await ethers.getContractAt("IERC20", wethAddress);
 
     // check autocompound result and gas costs
-    const [b0,b1, compounded0, compounded1] = await contract.connect(compoundor).callStatic.autoCompound({tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true})
-    const totalBonusX64 = await contract.totalBonusX64();
-    const compounderBonusX64 = await contract.compounderBonusX64();
+    const [b0,b1, compounded0, compounded1] = await contract.connect(compoundor).callStatic.autoCompound({tokenId: nftId, rewardConversion: 0, withdrawReward: false, doSwap: true})
+    const totalRewardX64 = await contract.totalRewardX64();
+    const compounderRewardX64 = await contract.compounderRewardX64();
 
     // execute autocompound (from owner contract)
-    await contract.connect(compoundor).autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true })
+    await contract.connect(compoundor).autoCompound({ tokenId: nftId, rewardConversion: 0, withdrawReward: false, doSwap: true })
 
     // get amounts leftover in buffer
     const buffer0 = await contract.accountBalances(nftOwnerAddress, token0.address);
@@ -325,9 +325,9 @@ describe("AutoCompounder Tests", function () {
 
     // check autocompound result
     const position = await nonfungiblePositionManager.positions(nftId);
-    const [bonus0, bonus1] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: false })
+    const [reward0, reward1] = await contract.callStatic.autoCompound( { tokenId: nftId, rewardConversion: 0, withdrawReward: false, doSwap: false })
 
-    const gasCost = await contract.estimateGas.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: false })
+    const gasCost = await contract.estimateGas.autoCompound( { tokenId: nftId, rewardConversion: 0, withdrawReward: false, doSwap: false })
 
     const gasPrice = await ethers.provider.getGasPrice()
     const costETH = parseFloat(ethers.utils.formatEther(gasPrice.mul(gasCost)))
@@ -339,19 +339,19 @@ describe("AutoCompounder Tests", function () {
     // calculate value of collected amounts in ETH
     const valueETHBefore = a0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96)).add(a1.mul(tokenPrice1X96).div(BigNumber.from(2).pow(96)))
 
-    // check bonus payouts (from owner contract)
-    const [bonus0a, bonus1a, comp0a, comp1a] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: false })
-    expect(bonus0a).to.gt(0)
-    expect(bonus1a).to.gt(0)
-    const [bonus0b, bonus1b, comp0b, comp1b] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 1, withdrawBonus: false, doSwap: false })
-    expect(bonus0b).to.gt(0)
-    expect(bonus1b).to.eq(0)
-    const [bonus0c, bonus1c, comp0c, comp1c] = await contract.callStatic.autoCompound( { tokenId: nftId, bonusConversion: 2, withdrawBonus: false, doSwap: false })
-    expect(bonus0c).to.eq(0)
-    expect(bonus1c).to.gt(0)
+    // check reward payouts (from owner contract)
+    const [reward0a, reward1a, comp0a, comp1a] = await contract.callStatic.autoCompound( { tokenId: nftId, rewardConversion: 0, withdrawReward: false, doSwap: false })
+    expect(reward0a).to.gt(0)
+    expect(reward1a).to.gt(0)
+    const [reward0b, reward1b, comp0b, comp1b] = await contract.callStatic.autoCompound( { tokenId: nftId, rewardConversion: 1, withdrawReward: false, doSwap: false })
+    expect(reward0b).to.gt(0)
+    expect(reward1b).to.eq(0)
+    const [reward0c, reward1c, comp0c, comp1c] = await contract.callStatic.autoCompound( { tokenId: nftId, rewardConversion: 2, withdrawReward: false, doSwap: false })
+    expect(reward0c).to.eq(0)
+    expect(reward1c).to.gt(0)
 
     // execute autocompound (from owner contract)
-    await contract.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: false })
+    await contract.autoCompound( { tokenId: nftId, rewardConversion: 0, withdrawReward: false, doSwap: false })
 
     // get leftover
     const bh0 = await contract.accountBalances(haydenAddress, usdcAddress);
@@ -361,13 +361,13 @@ describe("AutoCompounder Tests", function () {
     const bo0 = await contract.accountBalances(owner.address, usdcAddress);
     const bo1 = await contract.accountBalances(owner.address, usdtAddress);
 
-    // calculate sum of bonus / leftovers / compounded amount in ETH
+    // calculate sum of reward / leftovers / compounded amount in ETH
     const valueETHAfter = bo0.add(comp0a).add(bh0).mul(tokenPrice0X96).div(BigNumber.from(2).pow(96)).add(bo1.add(comp1a).add(bh1).mul(tokenPrice1X96).div(BigNumber.from(2).pow(96)))
 
     // both values should be very close
     expect(valueETHBefore.mul(1000).div(valueETHAfter)).to.be.within(999, 1001)
 
-    // withdraw bonus 1 by 1
+    // withdraw reward 1 by 1
     await contract.withdrawBalance(position.token0, owner.address, bo0)
     await contract.withdrawBalance(position.token1, owner.address, bo1)
     expect(await contract.accountBalances(owner.address, usdcAddress)).to.equal(0);

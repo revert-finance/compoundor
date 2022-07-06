@@ -19,7 +19,7 @@ import "./external/uniswap/v3-periphery/interfaces/ISwapRouter.sol";
 interface ICompoundor is IERC721Receiver {
    
     // config changes
-    event BonusUpdated(address account, uint64 totalBonusX64, uint64 compounderBonusX64);
+    event RewardUpdated(address account, uint64 totalRewardX64, uint64 compounderRewardX64);
     event TWAPConfigUpdated(address account, uint32 maxTWAPTickDifference, uint32 TWAPSeconds);
 
     // token movements
@@ -37,8 +37,8 @@ interface ICompoundor is IERC721Receiver {
         uint256 tokenId,
         uint256 amountAdded0,
         uint256 amountAdded1,
-        uint256 bonus0,
-        uint256 bonus1,
+        uint256 reward0,
+        uint256 reward1,
         address token0,
         address token1
     );
@@ -55,11 +55,11 @@ interface ICompoundor is IERC721Receiver {
     /// @notice The nonfungible position manager address with which this staking contract is compatible
     function swapRouter() external view returns (ISwapRouter);
 
-    /// @notice Total bonus which is payed for autocompounding
-    function totalBonusX64() external view returns (uint64);
+    /// @notice Total reward which is payed for autocompounding
+    function totalRewardX64() external view returns (uint64);
 
-    /// @notice Bonus which is payed to compounder - less or equal to totalBonusX64
-    function compounderBonusX64() external view returns (uint64);
+    /// @notice Reward which is payed to compounder - less or equal to totalRewardX64
+    function compounderRewardX64() external view returns (uint64);
 
     /// @notice Max tick difference between TWAP tick and current price to allow operations
     function maxTWAPTickDifference() external view returns (uint32);
@@ -68,11 +68,11 @@ interface ICompoundor is IERC721Receiver {
     function TWAPSeconds() external view returns (uint32);
 
     /**
-     * @notice Management method to lower bonus or change ratio between total and compounder bonus (onlyOwner)
-     * @param _totalBonusX64 new total bonus (can't be higher than current total bonus)
-     * @param _compounderBonusX64 new compounder bonus
+     * @notice Management method to lower reward or change ratio between total and compounder reward (onlyOwner)
+     * @param _totalRewardX64 new total reward (can't be higher than current total reward)
+     * @param _compounderRewardX64 new compounder reward
      */
-    function setBonus(uint64 _totalBonusX64, uint64 _compounderBonusX64) external;
+    function setReward(uint64 _totalRewardX64, uint64 _compounderRewardX64) external;
 
     /**
      * @notice Management method to change the max tick difference from twap to allow swaps (onlyOwner)
@@ -124,8 +124,8 @@ interface ICompoundor is IERC721Receiver {
      */
     function withdrawBalance(address token, address to, uint256 amount) external;
 
-    /// @notice how bonus should be converted
-    enum BonusConversion { NONE, TOKEN_0, TOKEN_1 }
+    /// @notice how reward should be converted
+    enum RewardConversion { NONE, TOKEN_0, TOKEN_1 }
 
     /// @notice params for autoCompound()
     struct AutoCompoundParams {
@@ -133,10 +133,10 @@ interface ICompoundor is IERC721Receiver {
         uint256 tokenId;
         
         // which token to convert to
-        BonusConversion bonusConversion;
+        RewardConversion rewardConversion;
 
         // should token be withdrawn to compounder immediately
-        bool withdrawBonus;
+        bool withdrawReward;
 
         // do swap - to add max amount to position (costs more gas)
         bool doSwap;
@@ -145,12 +145,12 @@ interface ICompoundor is IERC721Receiver {
     /**
      * @notice Autocompounds for a given NFT (anyone can call this and gets a percentage of the fees)
      * @param params Autocompound specific parameters (tokenId, ...)
-     * @return bonus0 Amount of token0 caller recieves
-     * @return bonus1 Amount of token1 caller recieves
+     * @return reward0 Amount of token0 caller recieves
+     * @return reward1 Amount of token1 caller recieves
      * @return compounded0 Amount of token0 that was compounded
      * @return compounded1 Amount of token1 that was compounded
      */
-    function autoCompound(AutoCompoundParams calldata params) external returns (uint256 bonus0, uint256 bonus1, uint256 compounded0, uint256 compounded1);
+    function autoCompound(AutoCompoundParams calldata params) external returns (uint256 reward0, uint256 reward1, uint256 compounded0, uint256 compounded1);
 
     struct DecreaseLiquidityAndCollectParams {
         uint256 tokenId;
