@@ -27,11 +27,11 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
 
     using SafeMath for uint256;
 
-    uint128 constant EXP_64 = 2**64;
-    uint128 constant EXP_96 = 2**96;
+    uint128 constant Q64 = 2**64;
+    uint128 constant Q96 = 2**96;
 
     // max reward
-    uint64 constant public MAX_REWARD_X64 = uint64(EXP_64 / 50); // 2%
+    uint64 constant public MAX_REWARD_X64 = uint64(Q64 / 50); // 2%
 
     // max positions
     uint32 constant public MAX_POSITIONS_PER_ADDRESS = 100;
@@ -198,19 +198,19 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
             // only calculate them when not tokenOwner
             if (state.tokenOwner != msg.sender) {
                 if (params.rewardConversion == RewardConversion.NONE) {
-                    state.amount0Fees = compounded0.mul(totalRewardX64).div(EXP_64);
-                    state.amount1Fees = compounded1.mul(totalRewardX64).div(EXP_64);
+                    state.amount0Fees = compounded0.mul(totalRewardX64).div(Q64);
+                    state.amount1Fees = compounded1.mul(totalRewardX64).div(Q64);
                 } else {
                     // calculate total added - derive fees
-                    uint addedTotal0 = compounded0.add(compounded1.mul(EXP_96).div(state.priceX96));
+                    uint addedTotal0 = compounded0.add(compounded1.mul(Q96).div(state.priceX96));
                     if (params.rewardConversion == RewardConversion.TOKEN_0) {
-                        state.amount0Fees = addedTotal0.mul(totalRewardX64).div(EXP_64);
+                        state.amount0Fees = addedTotal0.mul(totalRewardX64).div(Q64);
                         // if there is not enough token0 to pay fee - pay all there is
                         if (state.amount0Fees > state.amount0.sub(compounded0)) {
                             state.amount0Fees = state.amount0.sub(compounded0);
                         }
                     } else {
-                        state.amount1Fees = addedTotal0.mul(state.priceX96).div(EXP_96).mul(totalRewardX64).div(EXP_64);
+                        state.amount1Fees = addedTotal0.mul(state.priceX96).div(Q96).mul(totalRewardX64).div(Q64);
                         // if there is not enough token1 to pay fee - pay all there is
                         if (state.amount1Fees > state.amount1.sub(compounded1)) {
                             state.amount1Fees = state.amount1.sub(compounded1);
@@ -500,8 +500,8 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
             }
         }
         
-        priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(EXP_96);
-        state.totalReward0 = amount0.add(amount1.mul(EXP_96).div(priceX96)).mul(totalRewardX64).div(EXP_64);
+        priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(Q96);
+        state.totalReward0 = amount0.add(amount1.mul(Q96).div(priceX96)).mul(totalRewardX64).div(Q64);
 
         // swap to correct proportions is requested
         if (params.doSwap) {
@@ -513,22 +513,22 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
                                                                 state.sqrtPriceX96, 
                                                                 state.sqrtPriceX96Lower, 
                                                                 state.sqrtPriceX96Upper, 
-                                                                EXP_96); // dummy value we just need ratio
+                                                                Q96); // dummy value we just need ratio
 
             // calculate how much of the position needs to be converted to the other token
             if (state.positionAmount0 == 0) {
                 state.delta0 = amount0;
                 state.sell0 = true;
             } else if (state.positionAmount1 == 0) {
-                state.delta0 = amount1.mul(EXP_96).div(priceX96);
+                state.delta0 = amount1.mul(Q96).div(priceX96);
                 state.sell0 = false;
             } else {
-                state.amountRatioX96 = state.positionAmount0.mul(EXP_96).div(state.positionAmount1);
-                state.sell0 = (state.amountRatioX96.mul(amount1) < amount0.mul(EXP_96));
+                state.amountRatioX96 = state.positionAmount0.mul(Q96).div(state.positionAmount1);
+                state.sell0 = (state.amountRatioX96.mul(amount1) < amount0.mul(Q96));
                 if (state.sell0) {
-                    state.delta0 = amount0.mul(EXP_96).sub(state.amountRatioX96.mul(amount1)).div(state.amountRatioX96.mul(priceX96).div(EXP_96).add(EXP_96));
+                    state.delta0 = amount0.mul(Q96).sub(state.amountRatioX96.mul(amount1)).div(state.amountRatioX96.mul(priceX96).div(Q96).add(Q96));
                 } else {
-                    state.delta0 = state.amountRatioX96.mul(amount1).sub(amount0.mul(EXP_96)).div(state.amountRatioX96.mul(priceX96).div(EXP_96).add(EXP_96));
+                    state.delta0 = state.amountRatioX96.mul(amount1).sub(amount0.mul(Q96)).div(state.amountRatioX96.mul(priceX96).div(Q96).add(Q96));
                 }
             }
 
@@ -545,12 +545,12 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
                         }
                     } else {
                         state.delta0 = state.delta0.add(state.totalReward0);
-                        if (state.delta0 > amount1.mul(EXP_96).div(priceX96)) {
-                            state.delta0 = amount1.mul(EXP_96).div(priceX96);
+                        if (state.delta0 > amount1.mul(Q96).div(priceX96)) {
+                            state.delta0 = amount1.mul(Q96).div(priceX96);
                         }
                     }
                 } else if (params.bc == RewardConversion.TOKEN_1) {
-                    state.rewardAmount1 = state.totalReward0.mul(priceX96).div(EXP_96);
+                    state.rewardAmount1 = state.totalReward0.mul(priceX96).div(Q96);
                     if (!state.sell0) {
                         if (state.delta0 >= state.totalReward0) {
                             state.delta0 = state.delta0.sub(state.totalReward0);
@@ -577,7 +577,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
                     amount0 = amount0.sub(state.delta0);
                     amount1 = amount1.add(amountOut);
                 } else {
-                    state.delta1 = state.delta0.mul(priceX96).div(EXP_96);
+                    state.delta1 = state.delta0.mul(priceX96).div(Q96);
                     // prevent possible rounding to 0 issue
                     if (state.delta1 > 0) {
                         uint256 amountOut = _swap(abi.encodePacked(params.token1, params.fee, params.token0), state.delta1, params.deadline);
@@ -591,7 +591,7 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
                 if (params.bc == RewardConversion.TOKEN_0) {
                     state.rewardAmount0 = state.totalReward0;
                 } else if (params.bc == RewardConversion.TOKEN_1) {
-                    state.rewardAmount1 = state.totalReward0.mul(priceX96).div(EXP_96);
+                    state.rewardAmount1 = state.totalReward0.mul(priceX96).div(Q96);
                 }
             }
         }
@@ -603,8 +603,8 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         } else {
             // in case caller is not owner - max amounts to add are slightly lower than available amounts - to account for reward payments
             if (params.bc == RewardConversion.NONE) {
-                maxAddAmount0 = amount0.mul(EXP_64).div(uint(totalRewardX64).add(EXP_64));
-                maxAddAmount1 = amount1.mul(EXP_64).div(uint(totalRewardX64).add(EXP_64));
+                maxAddAmount0 = amount0.mul(Q64).div(uint(totalRewardX64).add(Q64));
+                maxAddAmount1 = amount1.mul(Q64).div(uint(totalRewardX64).add(Q64));
             } else {
                 maxAddAmount0 = amount0 > state.rewardAmount0 ? amount0.sub(state.rewardAmount0) : 0;
                 maxAddAmount1 = amount1 > state.rewardAmount1 ? amount1.sub(state.rewardAmount1) : 0;

@@ -37,8 +37,8 @@ module.exports = {
     apiKey: {
       mainnet: process.env.ETHERSCAN_API_KEY_MAINNET,
       polygon: process.env.ETHERSCAN_API_KEY_POLYGON,
-      optimism: process.env.ETHERSCAN_API_KEY_OPTIMISM,
-      arbitrum: process.env.ETHERSCAN_API_KEY_ARBITRUM
+      optimisticEthereum: process.env.ETHERSCAN_API_KEY_OPTIMISM,
+      arbitrumOne: process.env.ETHERSCAN_API_KEY_ARBITRUM
     },
   },
   networks: {
