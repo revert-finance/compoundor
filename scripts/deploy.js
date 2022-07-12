@@ -30,6 +30,8 @@ async function main() {
   console.log("Deployed at", contract.address)
 }
 
+// npx hardhat verify --network polygon "0xe3159fc9E26B76De780D7fA1282c438548Ba4E09" "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270" "0x1F98431c8aD98523631AE4a59f267346ea31F984" "0xC36442b4a4522E871399CD717aBDD847Ab11FE88" "0xE592427A0AEce92De3Edee1F18E0157C05861564"
+
 main()
   .then(() => process.exit(0))
   .catch((error) => {
