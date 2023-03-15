@@ -48,13 +48,13 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
     // uniswap v3 components
     IUniswapV3Factory public override factory;
     INonfungiblePositionManager public override nonfungiblePositionManager;
-    ISwapRouter public override swapRouter;
+    ISwapRouter02 public override swapRouter;
 
     mapping(uint256 => address) public override ownerOf;
     mapping(address => uint256[]) public override accountTokens;
     mapping(address => mapping(address => uint256)) public override accountBalances;
 
-    constructor(address _weth, IUniswapV3Factory _factory, INonfungiblePositionManager _nonfungiblePositionManager, ISwapRouter _swapRouter) {
+    constructor(address _weth, IUniswapV3Factory _factory, INonfungiblePositionManager _nonfungiblePositionManager, ISwapRouter02 _swapRouter) {
         weth = _weth;
         factory = _factory;
         nonfungiblePositionManager = _nonfungiblePositionManager;
@@ -569,18 +569,14 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
 
             if (state.delta0 > 0) {
                 if (state.sell0) {
-                    uint256 amountOut = _swap(
-                                            abi.encodePacked(params.token0, params.fee, params.token1), 
-                                            state.delta0, 
-                                            params.deadline
-                                        );
+                    uint256 amountOut = _swap(abi.encodePacked(params.token0, params.fee, params.token1), state.delta0);
                     amount0 = amount0.sub(state.delta0);
                     amount1 = amount1.add(amountOut);
                 } else {
                     state.delta1 = state.delta0.mul(priceX96).div(Q96);
                     // prevent possible rounding to 0 issue
                     if (state.delta1 > 0) {
-                        uint256 amountOut = _swap(abi.encodePacked(params.token1, params.fee, params.token0), state.delta1, params.deadline);
+                        uint256 amountOut = _swap(abi.encodePacked(params.token1, params.fee, params.token0), state.delta1);
                         amount0 = amount0.add(amountOut);
                         amount1 = amount1.sub(state.delta1);
                     }
@@ -612,10 +608,10 @@ contract Compoundor is ICompoundor, ReentrancyGuard, Ownable, Multicall {
         }
     }
 
-    function _swap(bytes memory swapPath, uint256 amount, uint256 deadline) internal returns (uint256 amountOut) {
+    function _swap(bytes memory swapPath, uint256 amount) internal returns (uint256 amountOut) {
         if (amount > 0) {
             amountOut = swapRouter.exactInput(
-                ISwapRouter.ExactInputParams(swapPath, address(this), deadline, amount, 0)
+                IV3SwapRouter.ExactInputParams(swapPath, address(this), amount, 0)
             );
         }
     }

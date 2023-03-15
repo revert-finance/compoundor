@@ -7,7 +7,7 @@ import "./external/openzeppelin/token/ERC721/IERC721Receiver.sol";
 
 import "./external/uniswap/v3-core/interfaces/IUniswapV3Factory.sol";
 import "./external/uniswap/v3-periphery/interfaces/INonfungiblePositionManager.sol";
-import "./external/uniswap/v3-periphery/interfaces/ISwapRouter.sol";
+import "./external/uniswap/v3-periphery/interfaces/ISwapRouter02.sol";
 
 /*                                                  __          
   _________  ____ ___  ____  ____  __  ______  ____/ /___  _____
@@ -53,7 +53,7 @@ interface ICompoundor is IERC721Receiver {
     function nonfungiblePositionManager() external view returns (INonfungiblePositionManager);
 
     /// @notice The nonfungible position manager address with which this staking contract is compatible
-    function swapRouter() external view returns (ISwapRouter);
+    function swapRouter() external view returns (ISwapRouter02);
 
     /// @notice Total reward which is payed for autocompounding
     function totalRewardX64() external view returns (uint64);
