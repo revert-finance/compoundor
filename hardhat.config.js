@@ -1,10 +1,6 @@
 require('dotenv').config()
 
-require("@nomiclabs/hardhat-waffle");
-require("@nomiclabs/hardhat-etherscan");
-require("@nomiclabs/hardhat-ethers");
-require('hardhat-contract-sizer');
-require("hardhat-gas-reporter");
+require("@nomicfoundation/hardhat-toolbox");
 
 task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
   const accounts = await hre.ethers.getSigners();

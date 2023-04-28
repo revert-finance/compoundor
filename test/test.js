@@ -16,6 +16,83 @@ const swapRouterAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564"
 const haydenAddress = "0x11E4857Bb9993a50c685A79AFad4E6F65D518DDa"
 const zeroAddress = "0x0000000000000000000000000000000000000000"
 
+describe("SelfCompounder Tests", function () {
+  let contract, nonfungiblePositionManager, factory, owner, otherAccount;
+
+  beforeEach(async function () {
+
+      const Contract = await ethers.getContractFactory("SelfCompoundor");
+      contract = await Contract.deploy(nonfungiblePositionManagerAddress, swapRouterAddress);
+      await contract.deployed();
+
+      nonfungiblePositionManager = await ethers.getContractAt("INonfungiblePositionManager", nonfungiblePositionManagerAddress);
+      factory = await ethers.getContractAt("IUniswapV3Factory", factoryAddress);
+
+      [owner, otherAccount] = await ethers.getSigners();
+  });
+
+  it("Test setReward", async function () {
+
+    const totalReward = await contract.totalRewardX64();
+
+    // total reward is 2%
+    expect(totalReward).to.equal(BigNumber.from(2).pow(64).div(50));
+
+    // total reward can only be decreased
+    await expect(contract.setReward(totalReward.add(1))).to.be.reverted;
+    await contract.setReward(totalReward.sub(1));
+    const totalRewardPost = await contract.totalRewardX64();
+    expect(totalRewardPost).to.equal(totalReward.sub(1));
+
+    await contract.setReward(0);
+    expect(await contract.totalRewardX64()).to.equal(0);
+  });
+
+  it("Test without swap", async function () {
+    const nftId = 200003
+    const nftOwnerAddress = "0x4d5e66a82de082e9ac4931aa4d6dec2f5c70cd33";
+    const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
+
+    const position = await nonfungiblePositionManager.positions(nftId);
+
+    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256,bytes)"]](nftOwnerAddress, contract.address, nftId, "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000");
+  
+    const positionAfter = await nonfungiblePositionManager.positions(nftId);
+
+    expect(positionAfter.liquidity).to.be.greaterThan(position.liquidity);
+  })
+
+  it("Test with zero fee position", async function () {
+    const nftId = 200003
+    const nftOwnerAddress = "0x4d5e66a82de082e9ac4931aa4d6dec2f5c70cd33";
+    const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
+
+    const position = await nonfungiblePositionManager.positions(nftId);
+
+    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256,bytes)"]](nftOwnerAddress, contract.address, nftId, "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000");
+  
+    const positionAfter = await nonfungiblePositionManager.positions(nftId);
+  
+    expect(positionAfter.liquidity).to.be.equal(position.liquidity);
+
+  })
+
+  it("Test with swap", async function () {
+    const nftId = 149435
+    const nftOwnerAddress = "0xB5893a338CE1E5304732D223C703A65125765be2";
+    const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
+
+    const position = await nonfungiblePositionManager.positions(nftId);
+
+    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256,bytes)"]](nftOwnerAddress, contract.address, nftId, "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000");
+  
+    const positionAfter = await nonfungiblePositionManager.positions(nftId);
+  
+    expect(positionAfter.liquidity).to.be.greaterThan(position.liquidity);
+
+  })
+
+})
 
 describe("AutoCompounder Tests", function () {
 

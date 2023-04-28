@@ -1,20 +1,13 @@
 {
   "name": "compoundor",
   "devDependencies": {
-    "@nomiclabs/hardhat-ethers": "^2.0.5",
-    "@nomiclabs/hardhat-etherscan": "^3.0.4",
-    "@nomiclabs/hardhat-waffle": "^2.0.2",
+    "@nomicfoundation/hardhat-toolbox": "^2.0.2",
     "@thanpolas/univ3prices": "^3.0.2",
     "@uniswap/sdk-core": "^3.0.1",
     "@uniswap/smart-order-router": "^2.5.26",
     "@uniswap/v3-sdk": "^3.8.2",
-    "chai": "^4.3.6",
     "dotenv": "^16.0.1",
-    "ethereum-waffle": "^4.0.0",
-    "ethers": "^5.5.4",
-    "hardhat": "^2.9.9",
-    "hardhat-contract-sizer": "^2.5.1",
-    "hardhat-gas-reporter": "^1.0.8"
-  },
-  "dependencies": {}
+    "hardhat": "^2.14.0",
+    "hardhat-contract-sizer": "^2.8.0"
+  }
 }
