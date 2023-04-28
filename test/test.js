@@ -12,6 +12,7 @@ const wbtcAddress = "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const nonfungiblePositionManagerAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 const swapRouterAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564"
+const swapRouterNewAddress = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
 
 const haydenAddress = "0x11E4857Bb9993a50c685A79AFad4E6F65D518DDa"
 const zeroAddress = "0x0000000000000000000000000000000000000000"
@@ -22,7 +23,7 @@ describe("SelfCompounder Tests", function () {
   beforeEach(async function () {
 
       const Contract = await ethers.getContractFactory("SelfCompoundor");
-      contract = await Contract.deploy(nonfungiblePositionManagerAddress, swapRouterAddress);
+      contract = await Contract.deploy(nonfungiblePositionManagerAddress, swapRouterNewAddress);
       await contract.deployed();
 
       nonfungiblePositionManager = await ethers.getContractAt("INonfungiblePositionManager", nonfungiblePositionManagerAddress);
@@ -49,8 +50,8 @@ describe("SelfCompounder Tests", function () {
   });
 
   it("Test without swap", async function () {
-    const nftId = 200003
-    const nftOwnerAddress = "0x4d5e66a82de082e9ac4931aa4d6dec2f5c70cd33";
+    const nftId = 108881
+    const nftOwnerAddress = "0xB5893a338CE1E5304732D223C703A65125765be2";
     const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
 
     const position = await nonfungiblePositionManager.positions(nftId);
@@ -63,8 +64,8 @@ describe("SelfCompounder Tests", function () {
   })
 
   it("Test with zero fee position", async function () {
-    const nftId = 200003
-    const nftOwnerAddress = "0x4d5e66a82de082e9ac4931aa4d6dec2f5c70cd33";
+    const nftId = 108881
+    const nftOwnerAddress = "0xB5893a338CE1E5304732D223C703A65125765be2";
     const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
 
     const position = await nonfungiblePositionManager.positions(nftId);

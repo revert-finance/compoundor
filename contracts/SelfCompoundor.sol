@@ -13,10 +13,8 @@ import "./external/uniswap/v3-core/libraries/TickMath.sol";
 
 import "./external/uniswap/v3-periphery/libraries/LiquidityAmounts.sol";
 import "./external/uniswap/v3-periphery/interfaces/INonfungiblePositionManager.sol";
-import "./external/uniswap/v3-periphery/interfaces/ISwapRouter.sol";
+import "./external/uniswap/v3-periphery/interfaces/IV3SwapRouter.sol";
 
-// TODO v3 router for all chains
-// TODO test fix with new NFT
 
 /**
  * @title SelfCompoundor
@@ -44,7 +42,7 @@ contract SelfCompoundor is Ownable, Multicall {
     // uniswap v3 components
     IUniswapV3Factory immutable public factory;
     INonfungiblePositionManager immutable public nonfungiblePositionManager;
-    ISwapRouter immutable public swapRouter;
+    IV3SwapRouter immutable public swapRouter;
 
     // config changes
     event RewardUpdated(address account, uint64 totalRewardX64);
@@ -62,7 +60,7 @@ contract SelfCompoundor is Ownable, Multicall {
         address token1
     );
 
-    constructor(INonfungiblePositionManager _nonfungiblePositionManager, ISwapRouter _swapRouter) {
+    constructor(INonfungiblePositionManager _nonfungiblePositionManager, IV3SwapRouter _swapRouter) {
         weth = _nonfungiblePositionManager.WETH9();
         factory = IUniswapV3Factory(_nonfungiblePositionManager.factory());
         nonfungiblePositionManager = _nonfungiblePositionManager;
@@ -344,7 +342,7 @@ contract SelfCompoundor is Ownable, Multicall {
 
     function _swap(bytes memory swapPath, uint256 amount) internal returns (uint256 amountOut) {
         amountOut = swapRouter.exactInput(
-                ISwapRouter.ExactInputParams(swapPath, address(this), block.timestamp, amount, 0) // oracle price check prevents sandwich attacks
+                IV3SwapRouter.ExactInputParams(swapPath, address(this), amount, 0) // oracle price check prevents sandwich attacks
             );
     }
 }
