@@ -114,7 +114,12 @@ contract SelfCompoundor is Ownable, Multicall {
     ) external returns (bytes4) {
         require(msg.sender == address(nonfungiblePositionManager), "!univ3 pos");
 
-        AutoCompoundParams memory params = abi.decode(data, (AutoCompoundParams));
+        AutoCompoundParams memory params;
+        if (data.length > 0) {
+            params = abi.decode(data, (AutoCompoundParams));
+        } else {
+            params.doSwap = true; // default do swap
+        }
 
         _autoCompound(tokenId, from, params.doSwap);
 

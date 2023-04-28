@@ -78,14 +78,14 @@ describe("SelfCompounder Tests", function () {
 
   })
 
-  it("Test with swap", async function () {
+  it("Test with swap (and no config)", async function () {
     const nftId = 149435
     const nftOwnerAddress = "0xB5893a338CE1E5304732D223C703A65125765be2";
     const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
 
     const position = await nonfungiblePositionManager.positions(nftId);
 
-    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256,bytes)"]](nftOwnerAddress, contract.address, nftId, "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000");
+    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256)"]](nftOwnerAddress, contract.address, nftId);
   
     const positionAfter = await nonfungiblePositionManager.positions(nftId);
   
