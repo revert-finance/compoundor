@@ -35,12 +35,8 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      mainnet: process.env.ETHERSCAN_API_KEY_MAINNET,
-      polygon: process.env.ETHERSCAN_API_KEY_POLYGON,
-      optimisticEthereum: process.env.ETHERSCAN_API_KEY_OPTIMISM,
-      arbitrumOne: process.env.ETHERSCAN_API_KEY_ARBITRUM,
       bsc: process.env.ETHERSCAN_API_KEY_BNB
-    },
+    }
   },
   networks: {
     hardhat: {
@@ -49,25 +45,13 @@ module.exports = {
         blockNumber: 14667418 // 2022-04-27
       }
     },
-    polygon: {
-      url: "https://rpc.ankr.com/polygon",
-      chainId: 137
-    },
-    mainnet: {
-      url: "https://rpc.ankr.com/eth",
-      chainId: 1
-    },
-    optimism: {
-      url: "https://rpc.ankr.com/optimism",
-      chainId: 10
-    },
-    arbitrum: {
-      url: "https://rpc.ankr.com/arbitrum",
-      chainId: 42161
-    },
     bnb: {
       url: "https://bsc-dataseed.binance.org",
       chainId: 56
+    },
+    evmos: {
+      url: "https://evmos-evm.publicnode.com",
+      chainId: 9001
     }
   }
 };
