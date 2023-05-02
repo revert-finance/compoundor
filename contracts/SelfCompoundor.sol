@@ -188,9 +188,13 @@ contract SelfCompoundor is Ownable, Multicall {
 
             // deposit liquidity into tokenId
             if (state.maxAddAmount0 > 0 || state.maxAddAmount1 > 0) {
-
-                SafeERC20.safeApprove(IERC20(state.token0), address(nonfungiblePositionManager), state.maxAddAmount0);
-                SafeERC20.safeApprove(IERC20(state.token1), address(nonfungiblePositionManager), state.maxAddAmount1);
+                
+                if (state.maxAddAmount0 > 0) {
+                    SafeERC20.safeApprove(IERC20(state.token0), address(nonfungiblePositionManager), state.maxAddAmount0);
+                }
+                if (state.maxAddAmount1 > 0) {
+                    SafeERC20.safeApprove(IERC20(state.token1), address(nonfungiblePositionManager), state.maxAddAmount1);
+                }                
 
                 (, state.compounded0, state.compounded1) = nonfungiblePositionManager.increaseLiquidity(
                     INonfungiblePositionManager.IncreaseLiquidityParams(
@@ -203,8 +207,12 @@ contract SelfCompoundor is Ownable, Multicall {
                     )
                 );
 
-                SafeERC20.safeApprove(IERC20(state.token0), address(nonfungiblePositionManager), 0);
-                SafeERC20.safeApprove(IERC20(state.token1), address(nonfungiblePositionManager), 0);
+                if (state.maxAddAmount0 > 0) {
+                    SafeERC20.safeApprove(IERC20(state.token0), address(nonfungiblePositionManager), 0);
+                }
+                if (state.maxAddAmount1 > 0) {
+                    SafeERC20.safeApprove(IERC20(state.token1), address(nonfungiblePositionManager), 0);
+                }
 
                 // fees are always calculated based on added amount
                 state.amount0Fees = state.compounded0.mul(state.totalRewardX64).div(Q64);
