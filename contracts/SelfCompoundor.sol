@@ -28,11 +28,8 @@ contract SelfCompoundor is Ownable, Multicall {
     uint128 constant Q64 = 2**64;
     uint128 constant Q96 = 2**96;
 
-    // max reward
-    uint64 constant public MAX_REWARD_X64 = uint64(Q64 / 50); // 2% max reward
-
     // changable config values
-    uint64 public totalRewardX64 = MAX_REWARD_X64; // 2% default reward
+    uint64 constant public totalRewardX64 = uint64(Q64 / 100); // 1% fixed reward for protocol
     uint32 public maxTWAPTickDifference = 100; // 1% default max tick difference
     uint32 public TWAPSeconds = 60; // default TWAP period
 
@@ -45,7 +42,6 @@ contract SelfCompoundor is Ownable, Multicall {
     IV3SwapRouter immutable public swapRouter;
 
     // config changes
-    event RewardUpdated(address account, uint64 totalRewardX64);
     event TWAPConfigUpdated(address account, uint32 maxTWAPTickDifference, uint32 TWAPSeconds);
 
     // autocompound event
@@ -68,16 +64,6 @@ contract SelfCompoundor is Ownable, Multicall {
     }
 
     /**
-     * @notice Management method to lower reward (onlyOwner)
-     * @param _totalRewardX64 new total reward (can't be higher than current total reward)
-     */
-    function setReward(uint64 _totalRewardX64) external onlyOwner {
-        require(_totalRewardX64 <= totalRewardX64, ">totalRewardX64");
-        totalRewardX64 = _totalRewardX64;
-        emit RewardUpdated(msg.sender, _totalRewardX64);
-    }
-
-    /**
      * @notice Management method to change the max tick difference from twap to allow swaps (onlyOwner)
      * @param _maxTWAPTickDifference new max tick difference
      */
@@ -97,12 +83,6 @@ contract SelfCompoundor is Ownable, Multicall {
         SafeERC20.safeTransfer(IERC20(token), to, balance);
     }
 
-    // params which are encoded and sent with NFT safeTransferFrom method
-    struct AutoCompoundParams {
-        bool doSwap; // try to do pool swap - fails if oracle has not enough history or not in condition
-        bytes returnData; // data to be sent back with NFT
-    }
-
     /**
      * @dev When receiving a Uniswap V3 NFT, executes autocompound and returns NFT in same tx
      */
@@ -114,16 +94,19 @@ contract SelfCompoundor is Ownable, Multicall {
     ) external returns (bytes4) {
         require(msg.sender == address(nonfungiblePositionManager), "!univ3 pos");
 
-        AutoCompoundParams memory params;
+        bool doSwap;
+        bytes memory returnData;
+
         if (data.length > 0) {
-            params = abi.decode(data, (AutoCompoundParams));
+            (doSwap, returnData) = abi.decode(data, (bool, bytes));
         } else {
-            params.doSwap = true; // default do swap
+            doSwap = true; // default do swap and empty returnData
         }
 
-        _autoCompound(tokenId, from, params.doSwap);
+        _autoCompound(tokenId, from, doSwap);
 
-        nonfungiblePositionManager.safeTransferFrom(address(this), from, tokenId, params.returnData);
+        nonfungiblePositionManager.safeTransferFrom(address(this), from, tokenId, returnData);
+
         return this.onERC721Received.selector;
     }
 
@@ -219,7 +202,7 @@ contract SelfCompoundor is Ownable, Multicall {
                 state.amount1Fees = state.compounded1.mul(state.totalRewardX64).div(Q64);
             }
 
-            // calculate remaining tokens for owner
+            // return remaining tokens to owner
             if (state.amount0.sub(state.compounded0).sub(state.amount0Fees) > 0) {
                 SafeERC20.safeTransfer(IERC20(state.token0), from, state.amount0.sub(state.compounded0).sub(state.amount0Fees));
             }
@@ -297,12 +280,14 @@ contract SelfCompoundor is Ownable, Multicall {
         if (tSecs > 0) {
             // check that price is not too far from TWAP (protect from price manipulation attacks)
             (state.otherTick, state.twapOk) = _getTWAPTick(pool, tSecs);
+
+            // if not enough history do not allow swapping
             require(state.twapOk, "twap not available");
+
             _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
         }
         
         state.priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(Q96);
-
 
         // calculate ideal position amounts
         state.sqrtPriceX96Lower = TickMath.getSqrtRatioAtTick(params.tickLower);

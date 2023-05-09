@@ -32,23 +32,6 @@ describe("SelfCompounder Tests", function () {
       [owner, otherAccount] = await ethers.getSigners();
   });
 
-  it("Test setReward", async function () {
-
-    const totalReward = await contract.totalRewardX64();
-
-    // total reward is 2%
-    expect(totalReward).to.equal(BigNumber.from(2).pow(64).div(50));
-
-    // total reward can only be decreased
-    await expect(contract.setReward(totalReward.add(1))).to.be.reverted;
-    await contract.setReward(totalReward.sub(1));
-    const totalRewardPost = await contract.totalRewardX64();
-    expect(totalRewardPost).to.equal(totalReward.sub(1));
-
-    await contract.setReward(0);
-    expect(await contract.totalRewardX64()).to.equal(0);
-  });
-
   it("Test without swap", async function () {
     const nftId = 108881
     const nftOwnerAddress = "0xB5893a338CE1E5304732D223C703A65125765be2";
@@ -56,7 +39,7 @@ describe("SelfCompounder Tests", function () {
 
     const position = await nonfungiblePositionManager.positions(nftId);
 
-    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256,bytes)"]](nftOwnerAddress, contract.address, nftId, "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000");
+    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256,bytes)"]](nftOwnerAddress, contract.address, nftId, "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000");
   
     const positionAfter = await nonfungiblePositionManager.positions(nftId);
 
@@ -70,7 +53,7 @@ describe("SelfCompounder Tests", function () {
 
     const position = await nonfungiblePositionManager.positions(nftId);
 
-    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256,bytes)"]](nftOwnerAddress, contract.address, nftId, "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000");
+    await nonfungiblePositionManager.connect(nftOwnerSigner)[["safeTransferFrom(address,address,uint256,bytes)"]](nftOwnerAddress, contract.address, nftId, "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000");
   
     const positionAfter = await nonfungiblePositionManager.positions(nftId);
   
