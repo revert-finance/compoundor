@@ -41,9 +41,6 @@ contract SelfCompoundor is Ownable, Multicall {
     INonfungiblePositionManager immutable public nonfungiblePositionManager;
     IV3SwapRouter immutable public swapRouter;
 
-    // config changes
-    event TWAPConfigUpdated(address account, uint32 maxTWAPTickDifference, uint32 TWAPSeconds);
-
     // autocompound event
     event AutoCompounded(
         address account,
