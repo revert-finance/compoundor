@@ -21,7 +21,7 @@ import "./external/uniswap/v3-periphery/interfaces/IV3SwapRouter.sol";
  * Positions are sent to this contract, compounded and returned in the same tx
  * Simplified design with protocol rewards kept in the contract, to be withdrawn by the contract owner.
  * Leftover tokens are always returned to owner
- */                                  
+ */
 contract SelfCompoundor is Ownable, Multicall {
 
     using SafeMath for uint256;
@@ -109,13 +109,11 @@ contract SelfCompoundor is Ownable, Multicall {
         uint256 amount0Fees;
         uint256 amount1Fees;
         uint256 priceX96;
-        address tokenOwner;
         address token0;
         address token1;
         uint24 fee;
         int24 tickLower;
         int24 tickUpper;
-        uint256 totalRewardX64;
     }
 
     /**
@@ -152,10 +150,8 @@ contract SelfCompoundor is Ownable, Multicall {
                 (state.amount0, state.amount1) = _swapToPriceRatio(swapParams);
             }
 
-            state.totalRewardX64 = uint(totalRewardX64);
-
-            state.maxAddAmount0 = state.amount0.mul(Q64).div(state.totalRewardX64.add(Q64));	
-            state.maxAddAmount1 = state.amount1.mul(Q64).div(state.totalRewardX64.add(Q64));
+            state.maxAddAmount0 = state.amount0.mul(Q64).div(uint(totalRewardX64).add(Q64));	
+            state.maxAddAmount1 = state.amount1.mul(Q64).div(uint(totalRewardX64).add(Q64));
 
             // deposit liquidity into tokenId
             if (state.maxAddAmount0 > 0 || state.maxAddAmount1 > 0) {
@@ -186,8 +182,8 @@ contract SelfCompoundor is Ownable, Multicall {
                 }
 
                 // fees are always calculated based on added amount
-                state.amount0Fees = state.compounded0.mul(state.totalRewardX64).div(Q64);
-                state.amount1Fees = state.compounded1.mul(state.totalRewardX64).div(Q64);
+                state.amount0Fees = state.compounded0.mul(totalRewardX64).div(Q64);
+                state.amount1Fees = state.compounded1.mul(totalRewardX64).div(Q64);
             }
 
             // return remaining tokens to owner
@@ -222,8 +218,6 @@ contract SelfCompoundor is Ownable, Multicall {
 
     // state used during swap execution
     struct SwapState {
-        uint256 rewardAmount0;
-        uint256 rewardAmount1;
         uint256 positionAmount0;
         uint256 positionAmount1;
         int24 tick;
