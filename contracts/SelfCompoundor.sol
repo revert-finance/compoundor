@@ -17,9 +17,10 @@ import "./external/uniswap/v3-periphery/interfaces/IV3SwapRouter.sol";
 
 /**
  * @title SelfCompoundor
- * @dev Contract for autocompounding Uniswap V3 NFT positions in the same transaction.
- * Simplified design with protocol fees kept in the contract, to be withdrawn by the contract owner.
- * Leftover tokens are always returned directly to owner
+ * @dev Contract for manually compounding Uniswap V3 NFT positions which are not in auto-compoundor
+ * Positions are sent to this contract, compounded and returned in the same tx
+ * Simplified design with protocol rewards kept in the contract, to be withdrawn by the contract owner.
+ * Leftover tokens are always returned to owner
  */                                  
 contract SelfCompoundor is Ownable, Multicall {
 
@@ -262,17 +263,14 @@ contract SelfCompoundor is Ownable, Multicall {
         
         (state.sqrtPriceX96,state.tick,,,,,) = pool.slot0();
 
-        // do oracle validation
-        uint32 tSecs = TWAPSeconds;
-        if (tSecs > 0) {
-            // check that price is not too far from TWAP (protect from price manipulation attacks)
-            (state.otherTick, state.twapOk) = _getTWAPTick(pool, tSecs);
+        // oracle validation
+        // check that price is not too far from TWAP (protect from price manipulation attacks)
+        (state.otherTick, state.twapOk) = _getTWAPTick(pool, TWAPSeconds);
 
-            // if not enough history do not allow swapping
-            require(state.twapOk, "twap not available");
+        // if not enough history do not allow swapping
+        require(state.twapOk, "twap not available");
 
-            _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
-        }
+        _requireMaxTickDifference(state.tick, state.otherTick, maxTWAPTickDifference);
         
         state.priceX96 = uint256(state.sqrtPriceX96).mul(state.sqrtPriceX96).div(Q96);
 
