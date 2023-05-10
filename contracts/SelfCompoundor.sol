@@ -318,8 +318,6 @@ contract SelfCompoundor is Ownable, Multicall {
     }
 
     function _swap(bytes memory swapPath, uint256 amount) internal returns (uint256 amountOut) {
-        amountOut = swapRouter.exactInput(
-                IV3SwapRouter.ExactInputParams(swapPath, address(this), amount, 0) // oracle price check prevents sandwich attacks
-            );
+        amountOut = swapRouter.exactInput(IV3SwapRouter.ExactInputParams(swapPath, address(this), amount, 0)); // oracle price check prevents sandwich attacks
     }
 }
