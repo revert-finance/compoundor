@@ -74,6 +74,20 @@ describe("SelfCompounder Tests", function () {
   
     expect(positionAfter.liquidity).to.be.greaterThan(position.liquidity);
 
+    const usdc = await ethers.getContractAt("IERC20", usdcAddress);
+    const weth = await ethers.getContractAt("IERC20", wethAddress);
+
+    const balanceBeforeUSDC = await usdc.balanceOf(owner.address)
+    const balanceBeforeWETH = await weth.balanceOf(owner.address)
+
+    await contract.connect(owner).withdrawBalance(wbtcAddress, owner.address);
+    await contract.connect(owner).withdrawBalance(wethAddress, owner.address);
+
+    // no usdc was available (because all usdc were swapped before)
+    expect(await usdc.balanceOf(owner.address)).to.eq(balanceBeforeUSDC)
+
+    // pure eth was available as fees
+    expect(await weth.balanceOf(owner.address)).to.gt(balanceBeforeWETH)
   })
 
 })

@@ -15,11 +15,11 @@ import "./external/uniswap/v3-periphery/libraries/LiquidityAmounts.sol";
 import "./external/uniswap/v3-periphery/interfaces/INonfungiblePositionManager.sol";
 import "./external/uniswap/v3-periphery/interfaces/IV3SwapRouter.sol";
 
-
 /**
  * @title SelfCompoundor
  * @dev Contract for autocompounding Uniswap V3 NFT positions in the same transaction.
- * Simplified design with protocol fees kept in the contract, to be withdrawn by the owner.
+ * Simplified design with protocol fees kept in the contract, to be withdrawn by the contract owner.
+ * Leftover tokens are always returned directly to owner
  */                                  
 contract SelfCompoundor is Ownable, Multicall {
 
@@ -28,10 +28,10 @@ contract SelfCompoundor is Ownable, Multicall {
     uint128 constant Q64 = 2**64;
     uint128 constant Q96 = 2**96;
 
-    // changable config values
+    // fixed config values (proven values from autocompounder contract - this contract can be redeployed if values need to change)
     uint64 constant public totalRewardX64 = uint64(Q64 / 100); // 1% fixed reward for protocol
-    uint32 public maxTWAPTickDifference = 100; // 1% default max tick difference
-    uint32 public TWAPSeconds = 60; // default TWAP period
+    uint32 constant public maxTWAPTickDifference = 100; // 1% max tick difference
+    uint32 constant public TWAPSeconds = 60; // TWAP period in seconds
 
     // wrapped native token address
     address immutable public weth;
@@ -61,16 +61,6 @@ contract SelfCompoundor is Ownable, Multicall {
         factory = IUniswapV3Factory(_nonfungiblePositionManager.factory());
         nonfungiblePositionManager = _nonfungiblePositionManager;
         swapRouter = _swapRouter;
-    }
-
-    /**
-     * @notice Management method to change the max tick difference from twap to allow swaps (onlyOwner)
-     * @param _maxTWAPTickDifference new max tick difference
-     */
-    function setTWAPConfig(uint32 _maxTWAPTickDifference, uint32 _TWAPSeconds) external onlyOwner {
-        maxTWAPTickDifference = _maxTWAPTickDifference;
-        TWAPSeconds = _TWAPSeconds;
-        emit TWAPConfigUpdated(msg.sender, _maxTWAPTickDifference, _TWAPSeconds);
     }
 
     /**
