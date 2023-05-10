@@ -33,8 +33,8 @@ describe("SelfCompounder Tests", function () {
   });
 
   it("Test without swap", async function () {
-    const nftId = 108881
-    const nftOwnerAddress = "0xB5893a338CE1E5304732D223C703A65125765be2";
+    const nftId = 2
+    const nftOwnerAddress = "0x4bd047ca72fa05f0b89ad08fe5ba5ccdc07dffbf";
     const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
 
     const position = await nonfungiblePositionManager.positions(nftId);
@@ -47,8 +47,8 @@ describe("SelfCompounder Tests", function () {
   })
 
   it("Test with zero fee position", async function () {
-    const nftId = 108881
-    const nftOwnerAddress = "0xB5893a338CE1E5304732D223C703A65125765be2";
+    const nftId = 2
+    const nftOwnerAddress = "0x4bd047ca72fa05f0b89ad08fe5ba5ccdc07dffbf";
     const nftOwnerSigner = await impersonateAccountAndGetSigner(nftOwnerAddress)
 
     const position = await nonfungiblePositionManager.positions(nftId);
