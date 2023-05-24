@@ -80,8 +80,8 @@ describe("SelfCompounder Tests", function () {
     const balanceBeforeUSDC = await usdc.balanceOf(owner.address)
     const balanceBeforeWETH = await weth.balanceOf(owner.address)
 
-    await contract.connect(owner).withdrawBalance(wbtcAddress, owner.address);
-    await contract.connect(owner).withdrawBalance(wethAddress, owner.address);
+  
+    await contract.connect(owner).withdrawBalances([wbtcAddress, wethAddress], owner.address);
 
     // no usdc was available (because all usdc were swapped before)
     expect(await usdc.balanceOf(owner.address)).to.eq(balanceBeforeUSDC)

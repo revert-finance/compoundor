@@ -3,9 +3,9 @@ pragma solidity ^0.7.6;
 pragma abicoder v2;
 
 import "./external/openzeppelin/access/Ownable.sol";
-import "./external/openzeppelin/utils/Multicall.sol";
 import "./external/openzeppelin/token/ERC20/SafeERC20.sol";
 import "./external/openzeppelin/math/SafeMath.sol";
+import "./external/openzeppelin/utils/ReentrancyGuard.sol";
 
 import "./external/uniswap/v3-core/interfaces/IUniswapV3Factory.sol";
 import "./external/uniswap/v3-core/interfaces/IUniswapV3Pool.sol";
@@ -22,7 +22,7 @@ import "./external/uniswap/v3-periphery/interfaces/IV3SwapRouter.sol";
  * Simplified design with protocol rewards kept in the contract, to be withdrawn by the contract owner.
  * Leftover tokens are always returned to owner
  */
-contract SelfCompoundor is Ownable, Multicall {
+contract SelfCompoundor is Ownable, ReentrancyGuard {
 
     using SafeMath for uint256;
 
@@ -44,8 +44,8 @@ contract SelfCompoundor is Ownable, Multicall {
 
     // autocompound event
     event AutoCompounded(
-        address account,
-        uint256 tokenId,
+        address indexed account,
+        uint256 indexed tokenId,
         uint256 amountAdded0,
         uint256 amountAdded1,
         uint256 reward0,
@@ -55,6 +55,9 @@ contract SelfCompoundor is Ownable, Multicall {
     );
 
     constructor(INonfungiblePositionManager _nonfungiblePositionManager, IV3SwapRouter _swapRouter) {
+
+        require(address(_nonfungiblePositionManager) != address(0) && address(_swapRouter) != address(0));
+
         weth = _nonfungiblePositionManager.WETH9();
         factory = IUniswapV3Factory(_nonfungiblePositionManager.factory());
         nonfungiblePositionManager = _nonfungiblePositionManager;
@@ -62,13 +65,21 @@ contract SelfCompoundor is Ownable, Multicall {
     }
 
     /**
-     * @notice Withdraws token balance to owner
-     * @param token Address of token to withdraw
+     * @notice Withdraws protocol fees (onlyOwner)
+     * @param tokens Addresses of tokens to withdraw
      * @param to Address to send to
      */
-    function withdrawBalance(address token, address to) external onlyOwner {
-        uint256 balance = IERC20(token).balanceOf(address(this));
-        SafeERC20.safeTransfer(IERC20(token), to, balance);
+    function withdrawBalances(address[] calldata tokens, address to) external onlyOwner {
+
+        require(to != address(0));
+
+        uint count = tokens.length;
+        uint i;
+        for(;i<count;++i) {
+            IERC20 token = IERC20(tokens[i]);
+            uint256 balance = token.balanceOf(address(this));
+            SafeERC20.safeTransfer(token, to, balance);
+        }
     }
 
     /**
@@ -79,7 +90,7 @@ contract SelfCompoundor is Ownable, Multicall {
         address from,
         uint256 tokenId,
         bytes calldata data
-    ) external returns (bytes4) {
+    ) external nonReentrant returns (bytes4) {
         require(msg.sender == address(nonfungiblePositionManager), "!univ3 pos");
 
         bool doSwap;

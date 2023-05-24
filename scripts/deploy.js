@@ -12,11 +12,12 @@ const nativeTokenAddresses = {
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const nonfungiblePositionManagerAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 const swapRouterAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564"
+const swapRouterAddressV2 = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
 
 async function main() {
 
   // set manually for each network
-  const gasPrice = 10000000000
+  const gasPrice = 200000000000
   const gasLimit = 6000000
 
   const signer = new hre.ethers.Wallet(process.env.DEPLOYMENT_PRIVATE_KEY, hre.ethers.provider)
@@ -25,9 +26,9 @@ async function main() {
 
   const nativeTokenAddress = nativeTokenAddresses[hre.network.name]
 
-  const Contract = await hre.ethers.getContractFactory("Compoundor", signer);
+  const Contract = await hre.ethers.getContractFactory("SelfCompoundor", signer);
   
-  const contract = await Contract.deploy(nativeTokenAddress, factoryAddress, nonfungiblePositionManagerAddress, swapRouterAddress, { gasPrice, gasLimit });
+  const contract = await Contract.deploy(nonfungiblePositionManagerAddress, swapRouterAddressV2, { gasPrice, gasLimit });
   await contract.deployed();
 
   //await contract.transferOwnership(process.env.MULTISIG_ACCOUNT);
