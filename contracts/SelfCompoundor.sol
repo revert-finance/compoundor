@@ -30,7 +30,7 @@ contract SelfCompoundor is Ownable, ReentrancyGuard {
     uint128 constant Q96 = 2**96;
 
     // fixed config values (proven values from autocompounder contract - this contract can be redeployed if values need to change)
-    uint64 constant public totalRewardX64 = uint64(Q64 / 100); // 1% fixed reward for protocol
+    uint64 constant public totalRewardX64 = 0; // 0% fixed reward for protocol
     uint32 constant public maxTWAPTickDifference = 100; // 1% max tick difference
     uint32 constant public TWAPSeconds = 60; // TWAP period in seconds
 
