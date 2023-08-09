@@ -35,8 +35,19 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      bsc: process.env.ETHERSCAN_API_KEY_BNB
-    }
+      bsc: process.env.ETHERSCAN_API_KEY_BNB,
+      base: process.env.ETHERSCAN_API_KEY_BASE
+    },
+    customChains: [
+      {
+        network: "base",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://basescan.org/api",
+          browserURL: "https://basescan.org"
+        }
+      }
+    ]
   },
   networks: {
     hardhat: {
@@ -52,6 +63,10 @@ module.exports = {
     evmos: {
       url: "https://evmos-evm.publicnode.com",
       chainId: 9001
+    },
+    base: {
+      url: "https://mainnet.base.org",
+      chainId: 8453
     }
   }
 };
