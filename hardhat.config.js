@@ -59,14 +59,6 @@ module.exports = {
     bnb: {
       url: "https://bsc-dataseed.binance.org",
       chainId: 56
-    },
-    evmos: {
-      url: "https://evmos-evm.publicnode.com",
-      chainId: 9001
-    },
-    base: {
-      url: "https://mainnet.base.org",
-      chainId: 8453
     }
   }
 };
