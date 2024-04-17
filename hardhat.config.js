@@ -36,7 +36,8 @@ module.exports = {
   etherscan: {
     apiKey: {
       bsc: process.env.ETHERSCAN_API_KEY_BNB,
-      base: process.env.ETHERSCAN_API_KEY_BASE
+      base: process.env.ETHERSCAN_API_KEY_BASE,
+      blast: process.env.ETHERSCAN_API_KEY_BLAST
     },
     customChains: [
       {
@@ -46,10 +47,22 @@ module.exports = {
           apiURL: "https://basescan.org/api",
           browserURL: "https://basescan.org"
         }
+      },
+      {
+        network: "blast",
+        chainId: 81457,
+        urls: {
+          apiURL: "https://api.blastscan.io/api",
+          browserURL: "https://blastscan.io"
+        }
       }
     ]
   },
   networks: {
+    blast: {
+      url: "https://rpc.blast.io",
+      chainId: 81457
+    },
     hardhat: {
       forking: {
         url: "https://eth-mainnet.alchemyapi.io/v2/" + process.env.ALCHEMY_KEY,
@@ -67,6 +80,7 @@ module.exports = {
     base: {
       url: "https://mainnet.base.org",
       chainId: 8453
-    }
+    },
+
   }
 };
