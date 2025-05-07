@@ -21,13 +21,24 @@ module.exports = {
     timeout: 100000000
   },
   solidity: {
-    version: "0.7.6",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 1000000,
+    compilers: [
+      {
+        version: "0.6.12",
+        settings: { optimizer: { enabled: true, runs: 200 } }
       },
-    }
+      {
+        version: "0.7.0",
+        settings: { optimizer: { enabled: true, runs: 200 } }
+      },
+      {
+        version: "0.7.6",
+        settings: { optimizer: { enabled: true, runs: 200 } }
+      },
+      {
+        version: "0.8.19",
+        settings: { optimizer: { enabled: true, runs: 200 } }
+      }
+    ]
   },
   etherscan: {
     apiKey: {
@@ -35,8 +46,19 @@ module.exports = {
       polygon: process.env.ETHERSCAN_API_KEY_POLYGON,
       optimisticEthereum: process.env.ETHERSCAN_API_KEY_OPTIMISM,
       arbitrumOne: process.env.ETHERSCAN_API_KEY_ARBITRUM,
-      bsc: process.env.ETHERSCAN_API_KEY_BNB
+      bsc: process.env.ETHERSCAN_API_KEY_BNB,
+      unichain: process.env.ETHERSCAN_API_KEY
     },
+    customChains: [
+      {
+        network: "unichain",
+        chainId: 130,
+        urls: {
+          apiURL: "https://api.uniscan.xyz/api",
+          browserURL: "https://uniscan.xyz"
+        }
+      }
+    ]
   },
   networks: {
     hardhat: {
@@ -68,6 +90,14 @@ module.exports = {
     evmos: {
       url: "https://evmos-evm.publicnode.com",
       chainId: 9001
+    },
+    unichain: {
+      url: process.env.UNICHAIN_RPC_URL || "https://mainnet.unichain.org",
+      accounts: process.env.DEPLOYMENT_PRIVATE_KEY ? [process.env.DEPLOYMENT_PRIVATE_KEY] : [],
+      chainId: 130
     }
   }
 };
+
+console.log("Loaded RPC URL:", process.env.UNICHAIN_RPC_URL);
+console.log("Loaded Private Key:", process.env.DEPLOYMENT_PRIVATE_KEY ? "Present" : "NOT FOUND");
